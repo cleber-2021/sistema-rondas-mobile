@@ -38,7 +38,7 @@ export default function VigilanteHome({ navigation }: any) {
 
   const handleStartPanico = () => {
     setSegurandoPanico(true);
-    setTimerPanico(setTimeout(() => { dispararSinalPanico(); setSegurandoPanico(false); }, 3000));
+    setTimerPanico(setTimeout(() => { dispararSinalPanico(); setSegurandoPanico(false); }, 1500));
   };
   const handleCancelPanico = () => { if (timerPanico) clearTimeout(timerPanico); setSegurandoPanico(false); };
 

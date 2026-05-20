@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
@@ -15,6 +15,25 @@ export default function SupervisorHome({ navigation }: any) {
       }
     }
     carregarUser();
+  }, []);
+
+  // Monitoramento de Pânico em tempo real (Polling)
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await api.get('/ocorrencias/panico-ativo');
+        if (res.data && res.data.existe_panico) {
+          Alert.alert(
+            "🆘 ALERTA DE PÂNICO", 
+            `O vigilante ${res.data.nome_vigilante || 'em campo'} disparou o pânico!`,
+            [{ text: "OK, visualizado" }]
+          );
+        }
+      } catch (e) {
+        // Silencioso para não incomodar se a rede oscilar
+      }
+    }, 10000); // Checa a cada 10 segundos
+    return () => clearInterval(interval);
   }, []);
 
   async function deslogar() {
@@ -64,7 +83,7 @@ export default function SupervisorHome({ navigation }: any) {
 
       </View>
 
-      <TouchableOpacity style={styles.btnLogout} onPress={deslogar}>
+      <TouchableOpacity style={styles.btnLogout} onPress={deslogar}>,
         <Ionicons name="log-out-outline" size={20} color="#dc2626" />
         <Text style={styles.btnLogoutText}>Sair da Conta</Text>
       </TouchableOpacity>
@@ -80,7 +99,7 @@ const styles = StyleSheet.create({
   
   menuContainer: { flex: 1, padding: 20, marginTop: 10 },
   
-  cardMenu: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 20, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#e2e8f0', elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5 },
+  cardMenu: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 20, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#e2e8f0', elevation: 2 },
   iconBox: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },
   cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#1e293b' },
   cardDesc: { fontSize: 13, color: '#64748b', marginTop: 4, lineHeight: 18 },
