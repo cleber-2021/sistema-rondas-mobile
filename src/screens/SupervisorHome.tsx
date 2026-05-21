@@ -83,7 +83,8 @@ export default function SupervisorHome({ navigation }: any) {
 
       </View>
 
-      <TouchableOpacity style={styles.btnLogout} onPress={deslogar}>,
+      {/* A VÍRGULA PERDIDA FOI REMOVIDA DESTA LINHA */}
+      <TouchableOpacity style={styles.btnLogout} onPress={deslogar}>
         <Ionicons name="log-out-outline" size={20} color="#dc2626" />
         <Text style={styles.btnLogoutText}>Sair da Conta</Text>
       </TouchableOpacity>

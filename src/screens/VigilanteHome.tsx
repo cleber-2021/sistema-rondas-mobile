@@ -30,10 +30,20 @@ export default function VigilanteHome({ navigation }: any) {
 
   async function dispararSinalPanico() {
     try {
+      // 1. Pede a permissão de GPS antes de tentar ler
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        return Alert.alert('Permissão Negada', 'O App precisa de acesso ao GPS para enviar o Pânico.');
+      }
+
       let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       await api.post('/ocorrencias/panico', { latitude: loc.coords.latitude, longitude: loc.coords.longitude });
       Alert.alert('🆘 SINAL ENVIADO', 'A central foi notificada.');
-    } catch (e) { Alert.alert('Erro', 'Falha ao enviar sinal de pânico.'); }
+    } catch (e: any) { 
+      // 2. Agora o erro vai aparecer no terminal se o problema for no servidor
+      console.log("Erro Pânico:", e.response?.data || e.message);
+      Alert.alert('Erro', 'Falha ao enviar sinal de pânico.'); 
+    }
   }
 
   const handleStartPanico = () => {
