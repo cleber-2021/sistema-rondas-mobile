@@ -48,20 +48,35 @@ export default function Login({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      
-      {/* Imagem adicionada aqui */}
       <Image 
          source={require('../../assets/logo_empresa.png')} 
          style={styles.logo} 
          resizeMode="contain" 
       />
-      <TextInput style={styles.input} placeholder="Usuário" value={usuarioLocal} onChangeText={setUsuarioLocal} autoCapitalize="none" />
+      {/* ADICIONADO: placeholderTextColor para forçar a cor do texto de fundo */}
+      <TextInput 
+        style={styles.input} 
+        placeholder="Usuário" 
+        placeholderTextColor="#94a3b8" 
+        value={usuarioLocal} 
+        onChangeText={setUsuarioLocal} 
+        autoCapitalize="none" 
+      />
+      
       <View style={styles.passwordContainer}>
-        <TextInput style={styles.passwordInput} placeholder="Senha" value={senha} onChangeText={setSenha} secureTextEntry={!mostrarSenha} />
+        <TextInput 
+          style={styles.passwordInput} 
+          placeholder="Senha" 
+          placeholderTextColor="#94a3b8" 
+          value={senha} 
+          onChangeText={setSenha} 
+          secureTextEntry={!mostrarSenha} 
+        />
         <TouchableOpacity style={styles.eyeIcon} onPress={() => setMostrarSenha(!mostrarSenha)}>
-          <Ionicons name={mostrarSenha ? "eye-off" : "eye"} size={24} color="#666" />
+          <Ionicons name={mostrarSenha ? "eye-off" : "eye"} size={24} color="#64748b" />
         </TouchableOpacity>
       </View>
+
       <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
         {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Conectar</Text>}
       </TouchableOpacity>
@@ -70,13 +85,15 @@ export default function Login({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center', padding: 20 },
-  title: { fontSize: 26, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 30 },
+  container: { flex: 1, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', padding: 20 },
   logo: { width: 250, height: 100, marginBottom: 30 },
-  input: { width: '100%', height: 55, backgroundColor: '#FFF', borderRadius: 8, paddingHorizontal: 15, marginBottom: 15, borderWidth: 1, borderColor: '#DDD' },
-  passwordContainer: { flexDirection: 'row', width: '100%', height: 55, backgroundColor: '#FFF', borderRadius: 8, marginBottom: 15, borderWidth: 1, borderColor: '#DDD', alignItems: 'center' },
-  passwordInput: { flex: 1, paddingHorizontal: 15 },
-  eyeIcon: { padding: 10 },
+  
+  // ADICIONADO: Fundo #f8fafc (cinza clarinho) para dar contraste com o fundo branco
+  input: { width: '100%', height: 55, backgroundColor: '#f8fafc', borderRadius: 8, paddingHorizontal: 15, marginBottom: 15, borderWidth: 1, borderColor: '#cbd5e1', color: '#1e293b', fontSize: 16 },
+  passwordContainer: { flexDirection: 'row', width: '100%', height: 55, backgroundColor: '#f8fafc', borderRadius: 8, marginBottom: 15, borderWidth: 1, borderColor: '#cbd5e1', alignItems: 'center' },
+  passwordInput: { flex: 1, paddingHorizontal: 15, color: '#1e293b', fontSize: 16 },
+  
+  eyeIcon: { padding: 15 },
   button: { width: '100%', height: 55, backgroundColor: '#0056b3', borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   buttonText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' }
 });

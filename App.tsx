@@ -36,6 +36,9 @@ export default function App() {
   // Registrar o canal para Android
   useEffect(() => {
     async function configurarNotificacoes() {
+      // Pede permissão ao usuário!
+      await Notifications.requestPermissionsAsync();
+
       if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('rondas-default', {
           name: 'Notificações de Rondas',
