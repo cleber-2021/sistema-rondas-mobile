@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Sulclean Rondas",
+    "name": "Ronda SSI",
     "slug": "sulclean-rondas",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#1e1e1e"
     },
     "ios": {
       "supportsTablet": true,
@@ -20,7 +20,7 @@
       "package": "com.sulclean.rondas",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#1e1e1e"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,

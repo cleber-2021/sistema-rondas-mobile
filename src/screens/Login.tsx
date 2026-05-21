@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, ActivityIndicator, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
@@ -48,7 +48,13 @@ export default function Login({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Ativar Dispositivo</Text>
+      
+      {/* Imagem adicionada aqui */}
+      <Image 
+         source={require('../../assets/logo_empresa.png')} 
+         style={styles.logo} 
+         resizeMode="contain" 
+      />
       <TextInput style={styles.input} placeholder="Usuário" value={usuarioLocal} onChangeText={setUsuarioLocal} autoCapitalize="none" />
       <View style={styles.passwordContainer}>
         <TextInput style={styles.passwordInput} placeholder="Senha" value={senha} onChangeText={setSenha} secureTextEntry={!mostrarSenha} />
@@ -66,6 +72,7 @@ export default function Login({ navigation }: any) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center', padding: 20 },
   title: { fontSize: 26, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 30 },
+  logo: { width: 250, height: 100, marginBottom: 30 },
   input: { width: '100%', height: 55, backgroundColor: '#FFF', borderRadius: 8, paddingHorizontal: 15, marginBottom: 15, borderWidth: 1, borderColor: '#DDD' },
   passwordContainer: { flexDirection: 'row', width: '100%', height: 55, backgroundColor: '#FFF', borderRadius: 8, marginBottom: 15, borderWidth: 1, borderColor: '#DDD', alignItems: 'center' },
   passwordInput: { flex: 1, paddingHorizontal: 15 },
