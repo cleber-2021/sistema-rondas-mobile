@@ -31,7 +31,7 @@ function formatarTempo(segundos: number) {
   return `${m}:${s}`;
 }
 
-export default function VigilanteRondas({ navigation }: any) {
+export default function VigilanteRondas({ navigation, route }: any) {
   const [rotasDisponiveis, setRotasDisponiveis] = useState<any[]>([]);
   const [rondaEmAndamento, setRondaEmAndamento] = useState<any>(null);
   const [pontoAtual, setPontoAtual] = useState<any>(null);
@@ -59,6 +59,29 @@ export default function VigilanteRondas({ navigation }: any) {
     const timerRelogio = setInterval(() => setHoraAtualDaUI(Date.now()), 10000);
     return () => clearInterval(timerRelogio);
   }, []);
+
+  // ─── AUTO-INÍCIO VIA NOTIFICAÇÃO ──────────────────────────────────────────
+  // Quando esta tela é aberta pelo listener do App.tsx (toque na notificação),
+  // o parâmetro `rota_id_auto` vem preenchido. Assim que as rotas estiverem
+  // carregadas, encontramos a rota correspondente e iniciamos automaticamente.
+  useEffect(() => {
+    const rotaIdAuto = route?.params?.rota_id_auto;
+    if (!rotaIdAuto || rotasDisponiveis.length === 0 || rondaEmAndamento) return;
+
+    const rotaAlvo = rotasDisponiveis.find(r => r.id === rotaIdAuto);
+    if (!rotaAlvo) return;
+
+    const ultimaTs = rotaAlvo.ultima_execucao
+      ? new Date(rotaAlvo.ultima_execucao).getTime()
+      : 0;
+    const proximaTs = ultimaTs + ((rotaAlvo.intervalo_minutos || 0) * 60000);
+    const liberada = !rotaAlvo.intervalo_minutos || ultimaTs === 0 || Date.now() >= proximaTs;
+
+    if (liberada) {
+      // Pequeno delay para garantir que a UI já renderizou antes de iniciar
+      setTimeout(() => iniciarRonda(rotaAlvo), 300);
+    }
+  }, [rotasDisponiveis, route?.params?.rota_id_auto]);
 
   async function verificarRondaEmAndamento() {
     const salva = await AsyncStorage.getItem('@Ronda:emAndamento');
@@ -126,27 +149,34 @@ export default function VigilanteRondas({ navigation }: any) {
     return () => { if (watchSubscription) watchSubscription.remove(); };
   }, [rondaEmAndamento, pontoAtual]);
 
-  // === CORREÇÃO DE NOTIFICAÇÕES ===
-  // Agenda a notificação local para o horário exato em que a ronda for liberada
   async function gerenciarAlertasDeRonda(rotas: any[]) {
     await Notifications.cancelAllScheduledNotificationsAsync();
-    rotas.forEach(async (rota) => {
-      if (rota.intervalo_minutos && rota.ultima_execucao) {
-        const ultimaTs = new Date(rota.ultima_execucao).getTime();
-        const proximaTs = ultimaTs + (rota.intervalo_minutos * 60000);
-        if (proximaTs > Date.now()) {
-          await Notifications.scheduleNotificationAsync({
-            content: { 
-              title: "⏰ Hora da Ronda!", 
-              body: `O roteiro "${rota.nome}" está liberado. Inicie agora!`, 
-              sound: true, 
-              priority: Notifications.AndroidPriority.MAX 
+    for (const rota of rotas) {
+      if (!rota.intervalo_minutos) continue;
+
+      const ultimaTs = rota.ultima_execucao
+        ? new Date(rota.ultima_execucao).getTime()
+        : 0;
+      const proximaTs = ultimaTs + (rota.intervalo_minutos * 60000);
+
+      if (proximaTs > Date.now()) {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: '⏰ Hora da Ronda!',
+            body: `O roteiro "${rota.nome}" está liberado. Toque para iniciar!`,
+            sound: true,
+            priority: Notifications.AndroidPriority.MAX,
+            // ─── CRÍTICO: payload lido pelo listener no App.tsx ───
+            data: {
+              tipo: 'RONDA_LIBERADA',
+              rota_id: rota.id,
+              rota_nome: rota.nome,
             },
-            trigger: { date: new Date(proximaTs) },
-          });
-        }
+          },
+          trigger: { date: new Date(proximaTs) },
+        });
       }
-    });
+    }
   }
 
   async function carregarRotas() {
@@ -266,17 +296,23 @@ export default function VigilanteRondas({ navigation }: any) {
             const intervaloMs = (rota.intervalo_minutos || 0) * 60000;
             const proximaExecucaoTs = ultimaExecucaoTs + intervaloMs;
             
+            // Liberada se: não tem intervalo, nunca foi executada, ou já passou o tempo
             const liberada = !rota.intervalo_minutos || ultimaExecucaoTs === 0 || horaAtualDaUI >= proximaExecucaoTs;
 
-            let textoBotao = "Iniciar";
-            let corBotao = '#0284c7'; // Azul 
+            let textoBotao = 'Iniciar';
+            let corBotao = '#0284c7';
             
             if (!liberada) {
               const dataProxima = new Date(proximaExecucaoTs);
-              const hh = dataProxima.getHours().toString().padStart(2, '0');
-              const mm = dataProxima.getMinutes().toString().padStart(2, '0');
-              textoBotao = `⏳ Às ${hh}:${mm}`;
-              corBotao = '#94a3b8'; // Cinza (Bloqueado)
+              // Garante que horas e minutos são números válidos antes de formatar
+              if (!isNaN(dataProxima.getTime())) {
+                const hh = dataProxima.getHours().toString().padStart(2, '0');
+                const mm = dataProxima.getMinutes().toString().padStart(2, '0');
+                textoBotao = `⏳ Às ${hh}:${mm}`;
+              } else {
+                textoBotao = '⏳ Aguardando';
+              }
+              corBotao = '#94a3b8';
             }
 
             return (

@@ -31,27 +31,38 @@ export default function VigilanteHome({ navigation }: any) {
         // Limpa alarmes antigos para não tocar duplicado
         await Notifications.cancelAllScheduledNotificationsAsync();
 
-        res.data.forEach(async (rota: any) => {
-          if (rota.intervalo_minutos && rota.ultima_execucao) {
-            const ultimaTs = new Date(rota.ultima_execucao).getTime();
-            const proximaTs = ultimaTs + (rota.intervalo_minutos * 60000);
+        for (const rota of res.data) {
+          // Se não tem intervalo configurado, esta rota não precisa de alarme
+          if (!rota.intervalo_minutos) continue;
 
-            // Se a próxima ronda ainda vai acontecer no futuro, agenda o alarme!
-            if (proximaTs > Date.now()) {
-              await Notifications.scheduleNotificationAsync({
-                content: { 
-                  title: "⏰ Hora da Patrulha!", 
-                  body: `Atenção Vigilante: O roteiro "${rota.nome}" está liberado. Inicie agora!`, 
-                  sound: true, 
-                  priority: Notifications.AndroidNotificationPriority.MAX,
-                  // @ts-ignore
-                  channelId: 'rondas-default'
+          const ultimaTs = rota.ultima_execucao
+            ? new Date(rota.ultima_execucao).getTime()
+            : 0;
+          const proximaTs = ultimaTs + (rota.intervalo_minutos * 60000);
+
+          // Se a próxima ronda ainda vai acontecer no futuro, agenda o alarme
+          if (proximaTs > Date.now()) {
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: '⏰ Hora da Patrulha!',
+                body: `O roteiro "${rota.nome}" está liberado. Toque para iniciar!`,
+                sound: true,
+                priority: Notifications.AndroidNotificationPriority.MAX,
+                // @ts-ignore
+                channelId: 'rondas-default',
+                // ─── CRÍTICO: este payload é lido pelo listener no App.tsx ───
+                // Quando o vigilante toca na notificação, o App.tsx usa estes
+                // dados para navegar para VigilanteRondas com o rota_id correto.
+                data: {
+                  tipo: 'RONDA_LIBERADA',
+                  rota_id: rota.id,
+                  rota_nome: rota.nome,
                 },
-                trigger: { date: new Date(proximaTs) },
-              });
-            }
+              },
+              trigger: { date: new Date(proximaTs) },
+            });
           }
-        });
+        }
       } catch (e) {
         console.log("Erro ao programar alarmes das rondas:", e);
       }

@@ -74,6 +74,30 @@ const Stack = createNativeStackNavigator();
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [rotaInicial, setRotaInicial] = useState('Login');
+  // Referência para o navegador — necessária para navegar de dentro do listener
+  const navigationRef = React.useRef<any>(null);
+
+  // ─── LISTENER GLOBAL DE TOQUE NA NOTIFICAÇÃO ──────────────────────────────
+  // Quando o vigilante toca na notificação "⏰ Hora da Ronda!", este listener
+  // lê o campo `data.rota_id` que foi embutido na notificação e navega
+  // diretamente para VigilanteRondas passando o ID da rota a ser iniciada.
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data as any;
+      if (data?.tipo === 'RONDA_LIBERADA' && data?.rota_id) {
+        // Espera o navegador estar pronto antes de redirecionar
+        const tentarNavegar = () => {
+          if (navigationRef.current?.isReady()) {
+            navigationRef.current.navigate('VigilanteRondas', { rota_id_auto: data.rota_id });
+          } else {
+            setTimeout(tentarNavegar, 200);
+          }
+        };
+        tentarNavegar();
+      }
+    });
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     async function configurar() {
@@ -151,7 +175,7 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator initialRouteName={rotaInicial} screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Login" component={Login} />
 
