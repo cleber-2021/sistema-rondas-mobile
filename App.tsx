@@ -1,14 +1,8 @@
 // App.tsx
-// ALTERAÇÕES:
-//  1. Registra canal Android separado para PÂNICO (prioridade máxima + som)
-//  2. Configura expo-background-fetch + expo-task-manager para polling em background
-//  3. A task de background verifica pânico ativo e dispara notificação local mesmo
-//     com o app fechado (fallback para quando o push do servidor não chega)
-
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { LogBox, Platform } from 'react-native';
+import { LogBox, Platform, ActivityIndicator, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
@@ -27,7 +21,6 @@ import VigilanteOcorrencia from './src/screens/VigilanteOcorrencia';
 
 LogBox.ignoreLogs(['expo-notifications: Android Push notifications']);
 
-// ─── Configuração de comportamento das notificações em foreground ────────────
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -36,16 +29,8 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// ─── Nome da task de background ──────────────────────────────────────────────
 const BACKGROUND_PANICO_TASK = 'background-panico-check';
 
-/**
- * TASK DE BACKGROUND — executada pelo SO mesmo com o app fechado/minimizado.
- * 
- * O Android acorda essa task aproximadamente a cada 15 minutos (limitação do SO).
- * Para pânico em tempo real o push notification do servidor é o mecanismo principal;
- * esta task é o fallback que garante que o supervisor veja o alerta ao abrir o app.
- */
 TaskManager.defineTask(BACKGROUND_PANICO_TASK, async () => {
   try {
     const token = await AsyncStorage.getItem('@RondasApp:token');
@@ -57,24 +42,21 @@ TaskManager.defineTask(BACKGROUND_PANICO_TASK, async () => {
 
     const usuario = JSON.parse(userString);
 
-    // Só supervisores precisam verificar pânico em background
     if (usuario.perfil !== 'SUPERVISOR') {
       return BackgroundFetch.BackgroundFetchResult.NoData;
     }
 
-    // Injeta token para a chamada da API
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     const res = await api.get('/ocorrencias/alertas/panico');
 
     if (res.data?.existe_panico) {
-      // Dispara notificação local como fallback (caso o push do servidor não tenha chegado)
       await Notifications.scheduleNotificationAsync({
         content: {
           title: '🆘 ALERTA CRÍTICO DE PÂNICO!',
           body: `Vigilante: ${res.data.nome_vigilante || 'Em Campo'}\nLocal: ${res.data.nome_local || 'Desconhecido'}`,
           sound: true,
           priority: Notifications.AndroidNotificationPriority.MAX,
-          // @ts-ignore — channelId é válido no Android
+          // @ts-ignore
           channelId: 'rondas-panico',
         },
         trigger: null,
@@ -90,16 +72,17 @@ TaskManager.defineTask(BACKGROUND_PANICO_TASK, async () => {
 const Stack = createNativeStackNavigator();
 
 export default function App() {
+  const [loading, setLoading] = useState(true);
+  const [rotaInicial, setRotaInicial] = useState('Login');
+
   useEffect(() => {
     async function configurar() {
-      // 1. Solicita permissão de notificações
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== 'granted') {
         console.warn('Permissão de notificações negada.');
       }
 
       if (Platform.OS === 'android') {
-        // 2a. Canal padrão (checklists, avisos gerais)
         await Notifications.setNotificationChannelAsync('rondas-default', {
           name: 'Notificações de Rondas',
           importance: Notifications.AndroidImportance.HIGH,
@@ -107,24 +90,21 @@ export default function App() {
           lightColor: '#2563eb',
         });
 
-        // 2b. Canal de pânico — prioridade MÁXIMA, toca mesmo no modo não-perturbe
         await Notifications.setNotificationChannelAsync('rondas-panico', {
           name: '🆘 Alertas de Pânico',
           importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 500, 200, 500, 200, 500],
           lightColor: '#dc2626',
           sound: 'default',
-          bypassDnd: true, // Fura o modo "Não Perturbe" — crítico para emergências
+          bypassDnd: true,
         });
       }
 
-      // 3. Registra a task de background fetch
-      //    minimumInterval: 60 segundos (o Android vai respeitar ~15 min na prática)
       try {
         await BackgroundFetch.registerTaskAsync(BACKGROUND_PANICO_TASK, {
           minimumInterval: 60,
-          stopOnTerminate: false,  // Continua mesmo após o app ser "swipado"
-          startOnBoot: true,       // Reinicia automaticamente ao ligar o celular
+          stopOnTerminate: false,
+          startOnBoot: true,
         });
         console.log('✅ Background fetch registrado.');
       } catch (e) {
@@ -132,17 +112,47 @@ export default function App() {
       }
     }
 
-    configurar();
+    async function verificarAutenticacao() {
+      try {
+        const token = await AsyncStorage.getItem('@RondasApp:token');
+        const userString = await AsyncStorage.getItem('@RondasApp:user');
 
-    // Limpa o background fetch ao desmontar (não ocorre em produção, mas bom para dev)
+        if (token && userString) {
+          const usuario = JSON.parse(userString);
+          api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+          
+          if (usuario.perfil === 'SUPERVISOR') {
+            setRotaInicial('SupervisorHome');
+          } else if (usuario.perfil === 'POSTO_SERVICO') {
+            setRotaInicial('VigilanteHome');
+          }
+        }
+      } catch (e) {
+        console.log("Erro na reidratação:", e);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    configurar();
+    verificarAutenticacao();
+
     return () => {
       BackgroundFetch.unregisterTaskAsync(BACKGROUND_PANICO_TASK).catch(() => {});
     };
   }, []);
 
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1e293b' }}>
+        <ActivityIndicator size="large" color="#2563eb" />
+      </View>
+    );
+  }
+
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
+      <Stack.Navigator initialRouteName={rotaInicial} screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Login" component={Login} />
 
         {/* Rotas Supervisor */}
