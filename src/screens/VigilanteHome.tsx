@@ -3,12 +3,11 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import * as Notifications from 'expo-notifications';
 import api from '../services/api';
 
 export default function VigilanteHome({ navigation }: any) {
   const [nomePosto, setNomePosto] = useState('');
-  
-  // O Pânico continua aqui para emergências imediatas mal se abre o app
   const [segurandoPanico, setSegurandoPanico] = useState(false);
   const [timerPanico, setTimerPanico] = useState<any>(null);
 
@@ -22,7 +21,51 @@ export default function VigilanteHome({ navigation }: any) {
     carregarUser();
   }, []);
 
+  // === NOVO: RADAR DE RONDAS (DESPERTADOR LOCAL) ===
+  // Agenda os alarmes de ronda assim que o vigilante entra na tela inicial
+  useEffect(() => {
+    async function programarAlarmesDasRondas() {
+      try {
+        const res = await api.get('/rotas');
+        
+        // Limpa alarmes antigos para não tocar duplicado
+        await Notifications.cancelAllScheduledNotificationsAsync();
+
+        res.data.forEach(async (rota: any) => {
+          if (rota.intervalo_minutos && rota.ultima_execucao) {
+            const ultimaTs = new Date(rota.ultima_execucao).getTime();
+            const proximaTs = ultimaTs + (rota.intervalo_minutos * 60000);
+
+            // Se a próxima ronda ainda vai acontecer no futuro, agenda o alarme!
+            if (proximaTs > Date.now()) {
+              await Notifications.scheduleNotificationAsync({
+                content: { 
+                  title: "⏰ Hora da Patrulha!", 
+                  body: `Atenção Vigilante: O roteiro "${rota.nome}" está liberado. Inicie agora!`, 
+                  sound: true, 
+                  priority: Notifications.AndroidNotificationPriority.MAX,
+                  // @ts-ignore
+                  channelId: 'rondas-default'
+                },
+                trigger: { date: new Date(proximaTs) },
+              });
+            }
+          }
+        });
+      } catch (e) {
+        console.log("Erro ao programar alarmes das rondas:", e);
+      }
+    }
+
+    programarAlarmesDasRondas();
+
+    // Recalcula os alarmes a cada 5 minutos caso o app fique muito tempo aberto
+    const interval = setInterval(programarAlarmesDasRondas, 5 * 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   async function deslogar() {
+    await Notifications.cancelAllScheduledNotificationsAsync(); // Limpa alarmes ao sair
     await AsyncStorage.clear();
     api.defaults.headers.common['Authorization'] = '';
     navigation.replace('Login');
@@ -30,7 +73,6 @@ export default function VigilanteHome({ navigation }: any) {
 
   async function dispararSinalPanico() {
     try {
-      // 1. Pede a permissão de GPS antes de tentar ler
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         return Alert.alert('Permissão Negada', 'O App precisa de acesso ao GPS para enviar o Pânico.');
@@ -40,7 +82,6 @@ export default function VigilanteHome({ navigation }: any) {
       await api.post('/ocorrencias/panico', { latitude: loc.coords.latitude, longitude: loc.coords.longitude });
       Alert.alert('🆘 SINAL ENVIADO', 'A central foi notificada.');
     } catch (e: any) { 
-      // 2. Agora o erro vai aparecer no terminal se o problema for no servidor
       console.log("Erro Pânico:", e.response?.data || e.message);
       Alert.alert('Erro', 'Falha ao enviar sinal de pânico.'); 
     }
@@ -50,7 +91,11 @@ export default function VigilanteHome({ navigation }: any) {
     setSegurandoPanico(true);
     setTimerPanico(setTimeout(() => { dispararSinalPanico(); setSegurandoPanico(false); }, 1500));
   };
-  const handleCancelPanico = () => { if (timerPanico) clearTimeout(timerPanico); setSegurandoPanico(false); };
+  
+  const handleCancelPanico = () => { 
+    if (timerPanico) clearTimeout(timerPanico); 
+    setSegurandoPanico(false); 
+  };
 
   return (
     <View style={styles.container}>
@@ -60,8 +105,6 @@ export default function VigilanteHome({ navigation }: any) {
       </View>
 
       <View style={styles.menuContainer}>
-        
-        {/* BOTÃO RONDAS */}
         <TouchableOpacity style={styles.cardMenu} onPress={() => navigation.navigate('VigilanteRondas')}>
           <View style={[styles.iconBox, { backgroundColor: '#e0f2fe' }]}>
             <Ionicons name="shield-checkmark-outline" size={32} color="#0284c7" />
@@ -73,7 +116,6 @@ export default function VigilanteHome({ navigation }: any) {
           <Ionicons name="chevron-forward" size={24} color="#cbd5e1" />
         </TouchableOpacity>
 
-        {/* BOTÃO PASSAGEM DE SERVIÇO */}
         <TouchableOpacity style={styles.cardMenu} onPress={() => navigation.navigate('VigilantePassagem')}>
           <View style={[styles.iconBox, { backgroundColor: '#fef3c7' }]}>
             <Ionicons name="clipboard-outline" size={32} color="#d97706" />
@@ -85,7 +127,6 @@ export default function VigilanteHome({ navigation }: any) {
           <Ionicons name="chevron-forward" size={24} color="#cbd5e1" />
         </TouchableOpacity>
 
-        {/* BOTÃO OCORRÊNCIAS */}
         <TouchableOpacity style={styles.cardMenu} onPress={() => navigation.navigate('VigilanteOcorrencia')}>
           <View style={[styles.iconBox, { backgroundColor: '#fee2e2' }]}>
             <Ionicons name="warning-outline" size={32} color="#dc2626" />
@@ -96,10 +137,8 @@ export default function VigilanteHome({ navigation }: any) {
           </View>
           <Ionicons name="chevron-forward" size={24} color="#cbd5e1" />
         </TouchableOpacity>
-
       </View>
 
-      {/* BOTÃO DE PÂNICO FIXO NO RODAPÉ */}
       <TouchableOpacity style={[styles.btnPanico, segurandoPanico && { backgroundColor: '#000', transform: [{ scale: 1.1 }] }]} onPressIn={handleStartPanico} onPressOut={handleCancelPanico}>
         <Text style={styles.textPanico}>{segurandoPanico ? 'ENVIANDO...' : 'S.O.S'}</Text>
       </TouchableOpacity>
