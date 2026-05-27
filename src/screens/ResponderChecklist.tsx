@@ -92,7 +92,14 @@ export default function ResponderChecklist({ route, navigation }: any) {
                 <TouchableOpacity style={[styles.btnResposta, respostaAtual === 'Não Conforme' && styles.btnNaoConforme]} onPress={() => selecionarResposta(p.id, 'Não Conforme')}><Text style={[styles.btnText, respostaAtual === 'Não Conforme' && { color: '#fff' }]}>Não Conforme</Text></TouchableOpacity>
                 <TouchableOpacity style={[styles.btnResposta, respostaAtual === 'N/A' && styles.btnNA]} onPress={() => selecionarResposta(p.id, 'N/A')}><Text style={[styles.btnText, respostaAtual === 'N/A' && { color: '#fff' }]}>N/A</Text></TouchableOpacity>
               </View>
-              <TextInput style={styles.inputObservacao} placeholder="Adicionar observação (opcional)..." value={respostas[p.id]?.observacao || ''} onChangeText={(texto) => digitarObservacao(p.id, texto)} multiline />
+              <TextInput 
+                style={styles.inputObservacao} 
+                placeholder="Adicionar observação (opcional)..." 
+                placeholderTextColor="#94a3b8" 
+                value={respostas[p.id]?.observacao || ''} 
+                onChangeText={(texto) => digitarObservacao(p.id, texto)} 
+                multiline 
+              />
               <TouchableOpacity style={styles.btnCamera} onPress={() => tirarFoto(p.id)}><Text style={styles.btnCameraText}>📸 {fotos[p.id] ? 'Trocar Foto' : 'Anexar Evidência'}</Text></TouchableOpacity>
               {fotos[p.id] && <Text style={styles.fotoSucessoText}>✅ Imagem capturada!</Text>}
             </View>
@@ -142,11 +149,10 @@ const styles = StyleSheet.create({
   btnConforme: { backgroundColor: '#10b981', borderColor: '#10b981' },
   btnNaoConforme: { backgroundColor: '#ef4444', borderColor: '#ef4444' },
   btnNA: { backgroundColor: '#94a3b8', borderColor: '#94a3b8' },
-  inputObservacao: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 6, padding: 10, minHeight: 60, textAlignVertical: 'top' },
   btnCamera: { marginTop: 15, paddingVertical: 10, paddingHorizontal: 15, backgroundColor: '#e0f2fe', borderRadius: 6, alignSelf: 'flex-start' },
   btnCameraText: { color: '#0369a1', fontWeight: 'bold', fontSize: 13 },
   fotoSucessoText: { color: '#10b981', marginTop: 8, fontSize: 13, fontWeight: 'bold' },
-  
+  inputObservacao: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 6, padding: 10, minHeight: 60, textAlignVertical: 'top', color: '#1e293b' },
   // Estilo do Botão Flutuante
   fabOcorrencia: { position: 'absolute', bottom: 90, right: 20, backgroundColor: '#dc2626', width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
   

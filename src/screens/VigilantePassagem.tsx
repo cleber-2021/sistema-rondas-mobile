@@ -171,7 +171,13 @@ export default function VigilantePassagem({ navigation }: any) {
                   </TouchableOpacity>
                 </View>
 
-                <TextInput style={[styles.inputArea, { height: 45, marginBottom: p.exige_foto ? 15 : 0 }]} placeholder="Observações (Opcional)..." value={respostasPassagem[p.id]?.observacao} onChangeText={txt => atualizarResposta(p.id, 'observacao', txt)} />
+                <TextInput 
+                  style={[styles.inputArea, { height: 45, marginBottom: p.exige_foto ? 15 : 0 }]} 
+                  placeholder="Observações (Opcional)..." 
+                  placeholderTextColor="#94a3b8" 
+                  value={respostasPassagem[p.id]?.observacao} 
+                  onChangeText={txt => atualizarResposta(p.id, 'observacao', txt)} 
+                />
 
                 {p.exige_foto && (
                   <TouchableOpacity style={[styles.btnCamera, { backgroundColor: respostasPassagem[p.id]?.foto_base64 ? '#10b981' : '#475569' }]} onPress={() => tirarFotoPassagem(p.id)}>
@@ -201,6 +207,6 @@ const styles = StyleSheet.create({
   chkCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFF', padding: 20, borderRadius: 12, marginBottom: 15, elevation: 2 },
   btnIniciar: { paddingVertical: 10, paddingHorizontal: 15, borderRadius: 8 },
   btnToggle: { flex: 1, padding: 12, borderRadius: 6, borderWidth: 1, borderColor: '#cbd5e1', alignItems: 'center', justifyContent: 'center' },
-  inputArea: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, paddingHorizontal: 15, fontSize: 14 },
+  inputArea: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, paddingHorizontal: 15, fontSize: 14, color: '#1e293b' },
   btnCamera: { padding: 15, borderRadius: 8, alignItems: 'center' }
 });

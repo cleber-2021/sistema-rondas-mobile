@@ -10,10 +10,11 @@ export default function VigilanteOcorrencia({ navigation }: any) {
   const [fotoBase64, setFotoBase64] = useState<string | null>(null);
   const [postoId, setPostoId] = useState<string | null>(null);
   
-  // Variáveis para selecionar o ponto
+  // === VARIÁVEIS DO NOVO COMBOBOX ===
   const [checkpointsPosto, setCheckpointsPosto] = useState<any[]>([]);
   const [buscaCheckpoint, setBuscaCheckpoint] = useState('');
   const [checkpointSelecionado, setCheckpointSelecionado] = useState<string>('');
+  const [comboboxAberto, setComboboxAberto] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -67,11 +68,12 @@ export default function VigilanteOcorrencia({ navigation }: any) {
         foto_base64: fotoBase64
       });
       Alert.alert('Sucesso', 'Ocorrência enviada para a central!');
-      navigation.goBack(); // Volta para o Menu
+      navigation.goBack(); 
     } catch (e) { Alert.alert('Erro', 'Falha ao enviar ocorrência.'); } finally { setLoading(false); }
   }
 
   const checkpointsFiltrados = checkpointsPosto.filter(cp => cp.nome.toLowerCase().includes(buscaCheckpoint.toLowerCase()));
+  const pontoSelecionadoObj = checkpointsPosto.find(cp => cp.id === checkpointSelecionado);
 
   return (
     <View style={styles.container}>
@@ -85,27 +87,77 @@ export default function VigilanteOcorrencia({ navigation }: any) {
         </View>
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
         
         <Text style={styles.label}>1. Em qual ponto ocorreu? (Opcional)</Text>
+        
+        {/* === COMPONENTE COMBOBOX CUSTOMIZADO === */}
         {checkpointsPosto.length > 0 && (
           <View style={{ marginBottom: 20 }}>
-            <TextInput style={styles.inputArea} placeholder="🔍 Digite para buscar o ponto..." value={buscaCheckpoint} onChangeText={setBuscaCheckpoint} />
-            {buscaCheckpoint.length > 0 && (
-              <View style={styles.dropdown}>
-                {checkpointsFiltrados.map((cp: any) => (
-                  <TouchableOpacity key={cp.id} style={[styles.dropItem, checkpointSelecionado === cp.id && { backgroundColor: '#fee2e2' }]} onPress={() => setCheckpointSelecionado(checkpointSelecionado === cp.id ? '' : cp.id)}>
-                    <Text style={{ color: checkpointSelecionado === cp.id ? '#dc2626' : '#475569', fontWeight: 'bold' }}>{cp.nome}</Text>
-                    {checkpointSelecionado === cp.id && <Text style={{ color: '#dc2626', fontWeight: 'bold' }}>✓</Text>}
+            {/* Botão que simula o input */}
+            <TouchableOpacity 
+              style={[styles.inputArea, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]} 
+              onPress={() => setComboboxAberto(!comboboxAberto)}
+              activeOpacity={0.8}
+            >
+              <Text style={{ color: pontoSelecionadoObj ? '#1e293b' : '#94a3b8', fontSize: 15, flex: 1 }} numberOfLines={1}>
+                {pontoSelecionadoObj ? pontoSelecionadoObj.nome : 'Selecione um ponto (Opcional)...'}
+              </Text>
+              
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                {pontoSelecionadoObj && (
+                  <TouchableOpacity onPress={(e) => { e.stopPropagation(); setCheckpointSelecionado(''); }}>
+                    <Ionicons name="close-circle" size={20} color="#94a3b8" />
                   </TouchableOpacity>
-                ))}
+                )}
+                <Ionicons name={comboboxAberto ? "chevron-up" : "chevron-down"} size={20} color="#64748b" />
+              </View>
+            </TouchableOpacity>
+
+            {/* Menu Dropdown Expandido */}
+            {comboboxAberto && (
+              <View style={styles.dropdownContainer}>
+                <TextInput 
+                  style={styles.inputBuscaCombo} 
+                  placeholder="🔍 Buscar ponto..." 
+                  placeholderTextColor="#94a3b8" 
+                  value={buscaCheckpoint} 
+                  onChangeText={setBuscaCheckpoint} 
+                  autoFocus={true}
+                />
+                <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled={true} keyboardShouldPersistTaps="handled">
+                  {checkpointsFiltrados.length === 0 ? (
+                    <Text style={{ padding: 15, textAlign: 'center', color: '#94a3b8' }}>Nenhum ponto encontrado.</Text>
+                  ) : (
+                    checkpointsFiltrados.map((cp: any) => (
+                      <TouchableOpacity 
+                        key={cp.id} 
+                        style={styles.dropItem} 
+                        onPress={() => {
+                          setCheckpointSelecionado(cp.id);
+                          setComboboxAberto(false);
+                          setBuscaCheckpoint(''); // Limpa a pesquisa ao selecionar
+                        }}
+                      >
+                        <Text style={{ color: '#475569', fontWeight: 'bold' }}>{cp.nome}</Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </ScrollView>
               </View>
             )}
           </View>
         )}
 
         <Text style={styles.label}>2. Descreva o Problema:</Text>
-        <TextInput style={[styles.inputArea, { height: 120, textAlignVertical: 'top' }]} placeholder="Descreva o que aconteceu..." multiline value={descricao} onChangeText={setDescricao} />
+        <TextInput 
+          style={[styles.inputArea, { height: 120, textAlignVertical: 'top' }]} 
+          placeholder="Descreva o que aconteceu..." 
+          placeholderTextColor="#94a3b8" 
+          multiline 
+          value={descricao} 
+          onChangeText={setDescricao} 
+        />
 
         <Text style={styles.label}>3. Evidência Visual (Opcional):</Text>
         <TouchableOpacity style={styles.btnCamera} onPress={abrirCamera}>
@@ -135,9 +187,13 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 14, color: '#64748b', marginTop: 2 },
   scroll: { padding: 20 },
   label: { fontSize: 15, fontWeight: 'bold', color: '#334155', marginBottom: 10, marginTop: 10 },
-  inputArea: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, padding: 15, fontSize: 15 },
-  dropdown: { maxHeight: 150, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, backgroundColor: '#fff', marginTop: 5, overflow: 'hidden' },
-  dropItem: { padding: 15, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', flexDirection: 'row', justifyContent: 'space-between' },
+  inputArea: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, padding: 15, fontSize: 15, color: '#1e293b' },
+  
+  // Estilos do novo Combobox
+  dropdownContainer: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, backgroundColor: '#fff', marginTop: 5, overflow: 'hidden', elevation: 3, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
+  inputBuscaCombo: { backgroundColor: '#f1f5f9', padding: 12, fontSize: 14, color: '#1e293b', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
+  dropItem: { padding: 15, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  
   btnCamera: { backgroundColor: '#475569', padding: 15, borderRadius: 8, alignItems: 'center' },
   btnCameraText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
   fotoSucesso: { color: '#10b981', fontWeight: 'bold', textAlign: 'center', marginTop: 10 },

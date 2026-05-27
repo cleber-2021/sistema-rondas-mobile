@@ -51,7 +51,8 @@ export default function SupervisorOcorrencias({ navigation }: any) {
         <Text style={styles.label}>Descreva a situação encontrada:</Text>
         <TextInput 
           style={styles.inputArea} 
-          placeholder="Ex: Lâmpada fundida na portaria..." 
+          placeholder="Ex: Lâmpada queimada na portaria..." 
+          placeholderTextColor="#94a3b8"
           multiline value={descricao} onChangeText={setDescricao} 
         />
 
@@ -82,10 +83,11 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 14, color: '#64748b', marginTop: 4 },
   form: { padding: 20 },
   label: { fontSize: 14, fontWeight: 'bold', color: '#334155', marginBottom: 10, marginTop: 10 },
-  inputArea: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, padding: 15, height: 120, textAlignVertical: 'top', fontSize: 15 },
+  
   btnCamera: { backgroundColor: '#475569', padding: 15, borderRadius: 8, alignItems: 'center' },
   btnCameraText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
   fotoSucesso: { color: '#10b981', fontWeight: 'bold', textAlign: 'center', marginTop: 10 },
   btnEnviar: { backgroundColor: '#dc2626', padding: 18, borderRadius: 8, alignItems: 'center', marginTop: 30, elevation: 2 },
-  btnEnviarText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }
+  btnEnviarText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  inputArea: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, padding: 15, height: 120, textAlignVertical: 'top', fontSize: 15, color: '#1e293b' },
 });
