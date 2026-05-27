@@ -21,60 +21,7 @@ export default function VigilanteHome({ navigation }: any) {
     carregarUser();
   }, []);
 
-  // === NOVO: RADAR DE RONDAS (DESPERTADOR LOCAL) ===
-  // Agenda os alarmes de ronda assim que o vigilante entra na tela inicial
-  useEffect(() => {
-    async function programarAlarmesDasRondas() {
-      try {
-        const res = await api.get('/rotas');
-        
-        // Limpa alarmes antigos para não tocar duplicado
-        await Notifications.cancelAllScheduledNotificationsAsync();
-
-        for (const rota of res.data) {
-          // Se não tem intervalo configurado, esta rota não precisa de alarme
-          if (!rota.intervalo_minutos) continue;
-
-          const ultimaTs = rota.ultima_execucao
-            ? new Date(rota.ultima_execucao).getTime()
-            : 0;
-          const proximaTs = ultimaTs + (rota.intervalo_minutos * 60000);
-
-          // Se a próxima ronda ainda vai acontecer no futuro, agenda o alarme
-          if (proximaTs > Date.now()) {
-            await Notifications.scheduleNotificationAsync({
-              content: {
-                title: '⏰ Hora da Patrulha!',
-                body: `O roteiro "${rota.nome}" está liberado. Toque para iniciar!`,
-                sound: true,
-                priority: Notifications.AndroidNotificationPriority.MAX,
-                // @ts-ignore
-                channelId: 'rondas-default',
-                // ─── CRÍTICO: este payload é lido pelo listener no App.tsx ───
-                // Quando o vigilante toca na notificação, o App.tsx usa estes
-                // dados para navegar para VigilanteRondas com o rota_id correto.
-                data: {
-                  tipo: 'RONDA_LIBERADA',
-                  rota_id: rota.id,
-                  rota_nome: rota.nome,
-                },
-              },
-              trigger: { date: new Date(proximaTs) },
-            });
-          }
-        }
-      } catch (e) {
-        console.log("Erro ao programar alarmes das rondas:", e);
-      }
-    }
-
-    programarAlarmesDasRondas();
-
-    // Recalcula os alarmes a cada 5 minutos caso o app fique muito tempo aberto
-    const interval = setInterval(programarAlarmesDasRondas, 5 * 60000);
-    return () => clearInterval(interval);
-  }, []);
-
+  
   async function deslogar() {
     await Notifications.cancelAllScheduledNotificationsAsync(); // Limpa alarmes ao sair
     await AsyncStorage.clear();

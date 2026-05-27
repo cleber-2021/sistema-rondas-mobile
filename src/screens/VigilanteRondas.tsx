@@ -60,29 +60,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
     return () => clearInterval(timerRelogio);
   }, []);
 
-  // ─── AUTO-INÍCIO VIA NOTIFICAÇÃO ──────────────────────────────────────────
-  // Quando esta tela é aberta pelo listener do App.tsx (toque na notificação),
-  // o parâmetro `rota_id_auto` vem preenchido. Assim que as rotas estiverem
-  // carregadas, encontramos a rota correspondente e iniciamos automaticamente.
-  useEffect(() => {
-    const rotaIdAuto = route?.params?.rota_id_auto;
-    if (!rotaIdAuto || rotasDisponiveis.length === 0 || rondaEmAndamento) return;
-
-    const rotaAlvo = rotasDisponiveis.find(r => r.id === rotaIdAuto);
-    if (!rotaAlvo) return;
-
-    const ultimaTs = rotaAlvo.ultima_execucao
-      ? new Date(rotaAlvo.ultima_execucao).getTime()
-      : 0;
-    const proximaTs = ultimaTs + ((rotaAlvo.intervalo_minutos || 0) * 60000);
-    const liberada = !rotaAlvo.intervalo_minutos || ultimaTs === 0 || Date.now() >= proximaTs;
-
-    if (liberada) {
-      // Pequeno delay para garantir que a UI já renderizou antes de iniciar
-      setTimeout(() => iniciarRonda(rotaAlvo), 300);
-    }
-  }, [rotasDisponiveis, route?.params?.rota_id_auto]);
-
+  
   async function verificarRondaEmAndamento() {
     const salva = await AsyncStorage.getItem('@Ronda:emAndamento');
     const fim = await AsyncStorage.getItem('@Ronda:fim');
