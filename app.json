@@ -18,6 +18,7 @@
     },
     "android": {
       "package": "com.sulclean.rondas",
+      "googleServicesFile": "./google-services.json", 
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo_fundo_preto.png",
         "backgroundColor": "#1e1e1e"
@@ -35,13 +36,7 @@
         "VIBRATE",
         "RECEIVE_BOOT_COMPLETED",
         "POST_NOTIFICATIONS",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_BACKGROUND_LOCATION",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_LOCATION",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "USE_FULL_SCREEN_INTENT" 
       ]
     },
     "web": {

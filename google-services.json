@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "86387034351",
+    "project_id": "ronda-ssi",
+    "storage_bucket": "ronda-ssi.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:86387034351:android:227f945a4d2eabccb4b31a",
+        "android_client_info": {
+          "package_name": "com.sulclean.rondas"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB51fPF3NdtisZKSbF3Nl4m_eEp556htB8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
