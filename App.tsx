@@ -18,6 +18,7 @@ import VigilanteHome from './src/screens/VigilanteHome';
 import VigilanteRondas from './src/screens/VigilanteRondas';
 import VigilantePassagem from './src/screens/VigilantePassagem';
 import VigilanteOcorrencia from './src/screens/VigilanteOcorrencia';
+import SupervisorPanico from './src/screens/SupervisorPanico';
 
 LogBox.ignoreLogs(['expo-notifications: Android Push notifications']);
 
@@ -81,21 +82,31 @@ export default function App() {
   // Quando o vigilante toca na notificação "⏰ Hora da Ronda!", este listener
   // lê o campo `data.rota_id` que foi embutido na notificação e navega
   // diretamente para VigilanteRondas passando o ID da rota a ser iniciada.
+  // ─── LISTENER GLOBAL DE TOQUE NA NOTIFICAÇÃO ──────────────────────────────
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data as any;
+      
+      // 1. Criamos a função FORA dos IFs para que todos possam usá-la, 
+      // e preparamos ela para receber o nome da rota e os parâmetros dinamicamente.
+      const tentarNavegar = (rota: string, params?: any) => {
+        if (navigationRef.current?.isReady()) {
+          navigationRef.current.navigate(rota, params);
+        } else {
+          setTimeout(() => tentarNavegar(rota, params), 200);
+        }
+      };
+
+      // 2. Agora fazemos as checagens chamando a função recém-criada
       if (data?.tipo === 'RONDA_LIBERADA' && data?.rota_id) {
-        // Espera o navegador estar pronto antes de redirecionar
-        const tentarNavegar = () => {
-          if (navigationRef.current?.isReady()) {
-            navigationRef.current.navigate('VigilanteRondas', { rota_id_auto: data.rota_id });
-          } else {
-            setTimeout(tentarNavegar, 200);
-          }
-        };
-        tentarNavegar();
+        tentarNavegar('VigilanteRondas', { rota_id_auto: data.rota_id });
+      } 
+      else if (data?.tipo === 'PANICO') {
+        // 👇 Joga o Supervisor direto para a tela de desarme de alarme
+        tentarNavegar('SupervisorPanico'); 
       }
     });
+    
     return () => subscription.remove();
   }, []);
 
@@ -183,6 +194,7 @@ export default function App() {
         <Stack.Screen name="SupervisorHome" component={SupervisorHome} />
         <Stack.Screen name="SupervisorDashboard" component={SupervisorDashboard} />
         <Stack.Screen name="SupervisorOcorrencias" component={SupervisorOcorrencias} />
+        <Stack.Screen name="SupervisorPanico" component={SupervisorPanico} />
         <Stack.Screen name="ResponderChecklist" component={ResponderChecklist} />
 
         {/* Rotas Vigilante */}

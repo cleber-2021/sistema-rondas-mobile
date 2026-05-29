@@ -90,6 +90,17 @@ export default function SupervisorHome({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
+      <TouchableOpacity style={styles.cardMenu} onPress={() => navigation.navigate('SupervisorPanico')}>
+          <View style={[styles.iconBox, { backgroundColor: '#fef2f2' }]}>
+            <Ionicons name="radio" size={32} color="#dc2626" />
+          </View>
+          <View style={{ flex: 1, marginLeft: 15 }}>
+            <Text style={styles.cardTitle}>Central de Pânico</Text>
+            <Text style={styles.cardDesc}>Acessar histórico de alertas S.O.S ou gerenciar crises ativas.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={24} color="#cbd5e1" />
+        </TouchableOpacity>
+
       <TouchableOpacity style={styles.btnLogout} onPress={deslogar}>
         <Ionicons name="log-out-outline" size={20} color="#dc2626" />
         <Text style={styles.btnLogoutText}>Sair da Conta</Text>
