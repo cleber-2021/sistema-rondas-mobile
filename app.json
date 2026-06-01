@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.sulclean.rondas",
-      "googleServicesFile": "./google-services.json", 
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo_fundo_preto.png",
         "backgroundColor": "#1e1e1e"
@@ -36,7 +36,7 @@
         "VIBRATE",
         "RECEIVE_BOOT_COMPLETED",
         "POST_NOTIFICATIONS",
-        "USE_FULL_SCREEN_INTENT" 
+        "USE_FULL_SCREEN_INTENT"
       ]
     },
     "web": {
@@ -58,7 +58,8 @@
         }
       ],
       "expo-notifications",
-      "expo-task-manager"
+      "expo-task-manager",
+      "expo-font"
     ],
     "extra": {
       "eas": {
