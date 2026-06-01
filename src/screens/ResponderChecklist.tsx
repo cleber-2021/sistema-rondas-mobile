@@ -29,7 +29,10 @@ export default function ResponderChecklist({ route, navigation }: any) {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') return Alert.alert('Permissão', 'Precisamos da câmera.');
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 0.3, base64: true });
-    if (!result.canceled && result.assets[0].base64) { setFotos(prev => ({ ...prev, [pergunta_id]: result.assets[0].base64 })); }
+    if (!result.canceled && result.assets[0].base64) {
+      const base64 = result.assets[0].base64;
+      setFotos(prev => ({ ...prev, [pergunta_id]: base64 }));
+    }
   }
 
   // === FUNÇÕES DA OCORRÊNCIA EXCEPCIONAL ===

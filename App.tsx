@@ -7,7 +7,7 @@ import * as Notifications from 'expo-notifications';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import api from './src/services/api';
+import api, { registrarHandlerSessaoExpirada } from './src/services/api';
 
 import Login from './src/screens/Login';
 import SupervisorHome from './src/screens/SupervisorHome';
@@ -25,6 +25,8 @@ LogBox.ignoreLogs(['expo-notifications: Android Push notifications']);
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
   }),
@@ -83,6 +85,22 @@ export default function App() {
   // lê o campo `data.rota_id` que foi embutido na notificação e navega
   // diretamente para VigilanteRondas passando o ID da rota a ser iniciada.
   // ─── LISTENER GLOBAL DE TOQUE NA NOTIFICAÇÃO ──────────────────────────────
+  // ─── HANDLER GLOBAL DE SESSÃO EXPIRADA ────────────────────────────────────
+  // Quando o interceptor de resposta da API detecta 401/403 (token expirado),
+  // ele chama esta função, que reseta a navegação de volta para o Login.
+  useEffect(() => {
+    registrarHandlerSessaoExpirada(() => {
+      const irParaLogin = () => {
+        if (navigationRef.current?.isReady()) {
+          navigationRef.current.reset({ index: 0, routes: [{ name: 'Login' }] });
+        } else {
+          setTimeout(irParaLogin, 200);
+        }
+      };
+      irParaLogin();
+    });
+  }, []);
+
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data as any;

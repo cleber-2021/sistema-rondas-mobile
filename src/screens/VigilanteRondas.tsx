@@ -11,8 +11,11 @@ import * as Notifications from 'expo-notifications';
 
 const BACKGROUND_LOCATION_TASK = 'BACKGROUND_LOCATION_TASK';
 
-TaskManager.defineTask(BACKGROUND_LOCATION_TASK, ({ data, error }) => {
-  if (error) return;
+TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
+  if (error) {
+    console.log('Erro na task de localização em background:', error.message);
+    return;
+  }
 });
 
 function calcularDistancia(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -143,7 +146,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
             title: '⏰ Hora da Ronda!',
             body: `O roteiro "${rota.nome}" está liberado. Toque para iniciar!`,
             sound: true,
-            priority: Notifications.AndroidPriority.MAX,
+            priority: Notifications.AndroidNotificationPriority.MAX,
             // ─── CRÍTICO: payload lido pelo listener no App.tsx ───
             data: {
               tipo: 'RONDA_LIBERADA',
@@ -151,18 +154,24 @@ export default function VigilanteRondas({ navigation, route }: any) {
               rota_nome: rota.nome,
             },
           },
-          trigger: { date: new Date(proximaTs) },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: new Date(proximaTs),
+          },
         });
       }
     }
   }
 
   async function carregarRotas() {
-    try { 
-      const res = await api.get('/rotas'); 
-      setRotasDisponiveis(res.data); 
+    try {
+      const res = await api.get('/rotas');
+      setRotasDisponiveis(res.data);
       gerenciarAlertasDeRonda(res.data); // Aciona o agendamento de notificação
-    } catch (e) {} 
+    } catch (e: any) {
+      console.log('Erro ao carregar rotas:', e.response?.data || e.message);
+      Alert.alert('Erro', 'Não foi possível carregar as rondas. Verifique sua conexão.');
+    }
   }
 
   async function iniciarRonda(rota: any) {
@@ -241,6 +250,9 @@ export default function VigilanteRondas({ navigation, route }: any) {
     try {
       await api.post('/ocorrencias', { ronda_id: rondaEmAndamento.id, checkpoint_id: pontoAtual.checkpoint_id, titulo: 'Ocorrência', descricao: descricaoOcorrencia, foto_base64: fotoBase64 });
       Alert.alert('Sucesso', 'Enviado!'); setModalOcorrencia(false);
+    } catch (e: any) {
+      console.log('Erro ao enviar ocorrência da ronda:', e.response?.data || e.message);
+      Alert.alert('Erro', 'Falha ao enviar a ocorrência.');
     } finally { setLoadingOco(false); }
   }
 
@@ -248,7 +260,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
     Alert.alert("⚠️ Interromper", "Deseja realmente abandonar a ronda?", [
       { text: "Continuar", style: "cancel" },
       { text: "Abandonar", style: "destructive", onPress: async () => {
-          try { await api.post('/rondas/encerrar', { ronda_id: rondaEmAndamento.id, abandonada: true }); } catch(e) {}
+          try { await api.post('/rondas/encerrar', { ronda_id: rondaEmAndamento.id, abandonada: true }); } catch(e: any) { console.log('Erro ao abandonar ronda (encerrando localmente mesmo assim):', e.response?.data || e.message); }
           await AsyncStorage.multiRemove(['@Ronda:emAndamento', '@Ronda:fim']);
           setRondaEmAndamento(null);
           setPontoAtual(null);

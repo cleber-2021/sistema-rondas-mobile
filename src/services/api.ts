@@ -2,10 +2,36 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const api = axios.create({
-  baseURL: 'https://sulcleansm.ddns.com.br:3443/api', 
+  baseURL: 'https://sulcleansm.ddns.com.br:3443/api',
 });
 
-// Interceptor corrigido: Garante a reidratação a cada chamada
+// ─── Handler global de sessão expirada ────────────────────────────────────
+// O App.tsx registra aqui uma função que limpa o estado e leva o usuário
+// de volta ao Login. Mantemos fora dos componentes para que o interceptor
+// (que roda fora da árvore React) consiga acioná-la sem dependência circular.
+let onSessaoExpirada: (() => void) | null = null;
+
+export function registrarHandlerSessaoExpirada(handler: () => void) {
+  onSessaoExpirada = handler;
+}
+
+// Evita disparar o logout várias vezes em rajadas de requisições paralelas
+let deslogando = false;
+
+async function limparSessao() {
+  if (deslogando) return;
+  deslogando = true;
+  try {
+    await AsyncStorage.multiRemove(['@RondasApp:token', '@RondasApp:user']);
+    api.defaults.headers.common['Authorization'] = '';
+    onSessaoExpirada?.();
+  } finally {
+    // Libera após um pequeno intervalo para não engolir respostas legítimas
+    setTimeout(() => { deslogando = false; }, 1000);
+  }
+}
+
+// Interceptor de request: reidrata o token a cada chamada
 api.interceptors.request.use(async (config) => {
   const token = await AsyncStorage.getItem('@RondasApp:token');
   if (token) {
@@ -15,5 +41,17 @@ api.interceptors.request.use(async (config) => {
 }, (error) => {
   return Promise.reject(error);
 });
+
+// Interceptor de response: detecta token expirado/ausente (401/403)
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const status = error.response?.status;
+    if (status === 401 || status === 403) {
+      await limparSessao();
+    }
+    return Promise.reject(error);
+  }
+);
 
 export default api;

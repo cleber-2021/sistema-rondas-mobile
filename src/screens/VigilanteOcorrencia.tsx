@@ -44,7 +44,9 @@ export default function VigilanteOcorrencia({ navigation }: any) {
         }
       });
       setCheckpointsPosto(listaPontosUnicos);
-    } catch (e) { }
+    } catch (e: any) {
+      console.log('Erro ao carregar checkpoints:', e.response?.data || e.message);
+    }
   }
 
   async function abrirCamera() {

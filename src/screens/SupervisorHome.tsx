@@ -21,7 +21,7 @@ export default function SupervisorHome({ navigation }: any) {
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const res = await api.get('/ocorrencias/panico-ativo');
+        const res = await api.get('/ocorrencias/alertas/panico');
         
         if (res.data && res.data.existe_panico && res.data.ocorrencia) {
           const panicoAtualId = res.data.ocorrencia.id;
@@ -36,7 +36,7 @@ export default function SupervisorHome({ navigation }: any) {
                 title: "🆘 ALERTA CRÍTICO DE PÂNICO!", 
                 body: `Vigilante: ${res.data.nome_vigilante || 'Em Campo'}\nLocal: ${res.data.nome_local || 'Desconhecido'}`, 
                 sound: true, 
-                priority: Notifications.AndroidPriority.MAX 
+                priority: Notifications.AndroidNotificationPriority.MAX
               },
               trigger: null, // Dispara imediatamente
             });
@@ -48,8 +48,10 @@ export default function SupervisorHome({ navigation }: any) {
           // Se não tem pânico ativo, reseta o radar
           ultimoPanicoAlertado.current = null;
         }
-      } catch (e) {}
-    }, 10000); 
+      } catch (e: any) {
+        console.log('Erro no polling de pânico:', e.response?.data || e.message);
+      }
+    }, 10000);
     return () => clearInterval(interval);
   }, []);
 

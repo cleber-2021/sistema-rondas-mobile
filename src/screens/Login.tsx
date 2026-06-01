@@ -71,6 +71,18 @@ export default function Login({ navigation }: any) {
         throw new Error('Dados de usuário não retornados corretamente pelo servidor.');
       }
 
+      // 1b. Restringe o acesso ao app: apenas vigilante (POSTO_SERVICO) e
+      // supervisor de campo (SUPERVISOR) podem usar o mobile. Perfis de gestão
+      // e monitoramento usam apenas o painel web.
+      const perfisMobile = ['SUPERVISOR', 'POSTO_SERVICO'];
+      if (!perfisMobile.includes(usuario.perfil)) {
+        setLoading(false);
+        return Alert.alert(
+          'Acesso restrito',
+          'Este aplicativo é exclusivo para vigilantes e supervisores de campo. Acesse o painel web com este perfil.'
+        );
+      }
+
       // 2. Persiste token e dados do usuário
       await AsyncStorage.setItem('@RondasApp:token', token);
       await AsyncStorage.setItem('@RondasApp:user', JSON.stringify(usuario));
