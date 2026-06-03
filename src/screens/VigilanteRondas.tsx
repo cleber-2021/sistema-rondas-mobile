@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Alert, Modal, ScrollView, TextInput, Image, ActivityIndicator, AppState } from 'react-native';
 import * as Location from 'expo-location'; 
 import * as ImagePicker from 'expo-image-picker';
@@ -47,6 +47,9 @@ export default function VigilanteRondas({ navigation, route }: any) {
   // Relógio interno da UI para bloqueio de rondas
   const [horaAtualDaUI, setHoraAtualDaUI] = useState(Date.now());
   
+  // Ref para evitar registrar o mesmo ponto duas vezes se o GPS oscila no raio
+  const jaRegistrando = useRef(false);
+
   const [modalScanner, setModalScanner] = useState(false);
   const [permissaoCamera, pedirPermissaoCamera] = useCameraPermissions();
   const [modalOcorrencia, setModalOcorrencia] = useState(false);
@@ -107,27 +110,48 @@ export default function VigilanteRondas({ navigation, route }: any) {
 
   useEffect(() => {
     let watchSubscription: Location.LocationSubscription | null = null;
+    jaRegistrando.current = false; // Reseta a cada troca de ponto
+
     async function iniciarRastreamento() {
-      if (rondaEmAndamento && pontoAtual?.checkpoints?.tipo_validacao === 'AUTOMATICA') {
-        await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
+      if (!rondaEmAndamento || pontoAtual?.checkpoints?.tipo_validacao !== 'AUTOMATICA') return;
+
+      try {
+        // Evita chamar startLocationUpdatesAsync se a task já está rodando
+        const jaRodando = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK).catch(() => false);
+        if (!jaRodando) {
+          await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
             accuracy: Location.Accuracy.BestForNavigation, timeInterval: 3000, distanceInterval: 1,
             foregroundService: { notificationTitle: "Ronda Ativa", notificationBody: "Monitorando posição...", notificationColor: "#0284c7" },
-        });
+          });
+        }
+
         watchSubscription = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 3000, distanceInterval: 1 },
           (loc) => {
-            const dist = calcularDistancia(loc.coords.latitude, loc.coords.longitude, Number(pontoAtual.checkpoints.latitude), Number(pontoAtual.checkpoints.longitude));
+            const dist = calcularDistancia(
+              loc.coords.latitude, loc.coords.longitude,
+              Number(pontoAtual.checkpoints.latitude), Number(pontoAtual.checkpoints.longitude)
+            );
             setDistanciaAtual(dist);
-            if (dist <= Number(pontoAtual.checkpoints.raio_tolerancia)) {
-                if (watchSubscription) watchSubscription.remove();
-                registrarPontoNaApi(loc.coords.latitude, loc.coords.longitude);
+
+            // Só registra se ainda não está processando — evita chamadas duplas quando GPS oscila no raio
+            if (dist <= Number(pontoAtual.checkpoints.raio_tolerancia) && !jaRegistrando.current) {
+              jaRegistrando.current = true;
+              registrarPontoNaApi(loc.coords.latitude, loc.coords.longitude);
             }
           }
         );
+      } catch (err) {
+        console.log('Erro ao iniciar rastreamento GPS:', err);
       }
     }
+
     iniciarRastreamento();
-    return () => { if (watchSubscription) watchSubscription.remove(); };
+
+    // Cleanup: remove a subscription ao trocar de ponto ou encerrar ronda
+    return () => {
+      if (watchSubscription) watchSubscription.remove();
+    };
   }, [rondaEmAndamento, pontoAtual]);
 
   async function gerenciarAlertasDeRonda(rotas: any[]) {
@@ -191,12 +215,16 @@ export default function VigilanteRondas({ navigation, route }: any) {
   async function registrarPontoNaApi(lat: number, lng: number) {
     if (lat === 0 && lng === 0) {
       Alert.alert("Erro", "Sinal de GPS indisponível. Aguarde a estabilização.");
+      jaRegistrando.current = false; // Permite nova tentativa
       return;
     }
     try {
       await api.post('/rondas/bater-ponto', { ronda_id: rondaEmAndamento.id, checkpoint_id: pontoAtual.checkpoint_id, latitude: lat, longitude: lng });
       avancaParaProximoPontoOuFinaliza();
-    } catch (e) { Alert.alert('Falha', 'Erro ao registrar.'); }
+    } catch (e) {
+      Alert.alert('Falha', 'Erro ao registrar ponto. O GPS vai tentar novamente.');
+      jaRegistrando.current = false; // Permite nova tentativa automática quando GPS atualizar
+    }
   }
 
   async function avancaParaProximoPontoOuFinaliza() {
