@@ -121,7 +121,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
         if (!jaRodando) {
           await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
             accuracy: Location.Accuracy.BestForNavigation, timeInterval: 3000, distanceInterval: 1,
-            foregroundService: { notificationTitle: "Ronda Ativa", notificationBody: "Monitorando posição...", notificationColor: "#0284c7" },
+            foregroundService: { notificationTitle: "Inspeção Ativa", notificationBody: "Monitorando posição...", notificationColor: "#0284c7" },
           });
         }
 
@@ -167,7 +167,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
       if (proximaTs > Date.now()) {
         await Notifications.scheduleNotificationAsync({
           content: {
-            title: '⏰ Hora da Ronda!',
+            title: '⏰ Hora da Inspeção!',
             body: `O roteiro "${rota.nome}" está liberado. Toque para iniciar!`,
             sound: true,
             priority: Notifications.AndroidNotificationPriority.MAX,
@@ -242,7 +242,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
       await api.post('/rondas/encerrar', { ronda_id: rondaEmAndamento.id });
       await AsyncStorage.multiRemove(['@Ronda:emAndamento', '@Ronda:fim']);
       setRondaEmAndamento(null);
-      Alert.alert('Sucesso', 'Ronda finalizada!');
+      Alert.alert('Sucesso', 'Inspeção finalizada!');
       carregarRotas(); // Recarrega para bloquear a próxima
     }
   }
@@ -285,7 +285,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
   }
 
   function interromperPatrulhaManual() {
-    Alert.alert("⚠️ Interromper", "Deseja realmente abandonar a ronda?", [
+    Alert.alert("⚠️ Interromper", "Deseja realmente abandonar a inspeção?", [
       { text: "Continuar", style: "cancel" },
       { text: "Abandonar", style: "destructive", onPress: async () => {
           try { await api.post('/rondas/encerrar', { ronda_id: rondaEmAndamento.id, abandonada: true }); } catch(e: any) { console.log('Erro ao abandonar ronda (encerrando localmente mesmo assim):', e.response?.data || e.message); }
@@ -303,7 +303,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 15, position: 'absolute', top: 60, left: 20, zIndex: 10 }}>
           <Ionicons name="arrow-back" size={28} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.title}>{rondaEmAndamento ? 'Ronda em Andamento' : 'Suas Rondas'}</Text>
+        <Text style={styles.title}>{rondaEmAndamento ? 'Inspeção em Andamento' : 'Suas Inspeções'}</Text>
       </View>
       
       {!rondaEmAndamento ? (
@@ -341,7 +341,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
                 </View>
                 <TouchableOpacity 
                   style={[styles.btnIniciar, { backgroundColor: corBotao }]} 
-                  onPress={() => liberada ? iniciarRonda(rota) : Alert.alert('Aguarde', `Esta ronda só estará liberada às ${textoBotao.replace('⏳ Às ', '')}.`)}
+                  onPress={() => liberada ? iniciarRonda(rota) : Alert.alert('Aguarde', `Esta inspeção só estará liberada às ${textoBotao.replace('⏳ Às ', '')}.`)}
                 >
                   <Text style={{color: '#fff', fontWeight: 'bold'}}>{textoBotao}</Text>
                 </TouchableOpacity>
@@ -369,7 +369,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
           </TouchableOpacity>
 
           <TouchableOpacity style={[styles.btnAcao, { backgroundColor: '#64748b', marginTop: 15 }]} onPress={interromperPatrulhaManual}>
-            <Text style={styles.btnAcaoText}>⏹️ Interromper Patrulha</Text>
+            <Text style={styles.btnAcaoText}>⏹️ Interromper Inspeção</Text>
           </TouchableOpacity>
       </View>
       )}
