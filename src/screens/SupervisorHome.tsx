@@ -34,7 +34,7 @@ export default function SupervisorHome({ navigation }: any) {
             await Notifications.scheduleNotificationAsync({
               content: { 
                 title: "🆘 ALERTA CRÍTICO DE PÂNICO!", 
-                body: `Vigilante: ${res.data.nome_vigilante || 'Em Campo'}\nLocal: ${res.data.nome_local || 'Desconhecido'}`, 
+                body: `Operador: ${res.data.nome_vigilante || 'Em Campo'}\nLocal: ${res.data.nome_local || 'Desconhecido'}`,
                 sound: true, 
                 priority: Notifications.AndroidNotificationPriority.MAX
               },
@@ -42,7 +42,7 @@ export default function SupervisorHome({ navigation }: any) {
             });
 
             // 2. Mostra na tela
-            Alert.alert("🆘 ALERTA DE PÂNICO", `O vigilante ${res.data.nome_vigilante || 'em campo'} disparou o pânico!`);
+            Alert.alert("🆘 ALERTA DE PÂNICO", `O operador ${res.data.nome_vigilante || 'em campo'} disparou o pânico!`);
           }
         } else {
           // Se não tem pânico ativo, reseta o radar

@@ -56,7 +56,7 @@ TaskManager.defineTask(BACKGROUND_PANICO_TASK, async () => {
       await Notifications.scheduleNotificationAsync({
         content: {
           title: '🆘 ALERTA CRÍTICO DE PÂNICO!',
-          body: `Vigilante: ${res.data.nome_vigilante || 'Em Campo'}\nLocal: ${res.data.nome_local || 'Desconhecido'}`,
+          body: `Operador: ${res.data.nome_vigilante || 'Em Campo'}\nLocal: ${res.data.nome_local || 'Desconhecido'}`,
           sound: true,
           priority: Notifications.AndroidNotificationPriority.MAX,
           // @ts-ignore

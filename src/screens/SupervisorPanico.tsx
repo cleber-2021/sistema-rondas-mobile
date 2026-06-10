@@ -116,7 +116,7 @@ export default function SupervisorPanico({ navigation }: any) {
               
               <View style={[styles.infoBox, { backgroundColor: bgColorBox }]}>
                 <Text style={styles.infoText}>📍 <Text style={{fontWeight:'bold'}}>Local:</Text> {oc.nome_local}</Text>
-                <Text style={styles.infoText}>👤 <Text style={{fontWeight:'bold'}}>Vigilante:</Text> {oc.usuarios?.nome || 'Desconhecido'}</Text>
+                <Text style={styles.infoText}>👤 <Text style={{fontWeight:'bold'}}>Operador:</Text> {oc.usuarios?.nome || 'Desconhecido'}</Text>
                 <Text style={styles.infoText}>⏰ <Text style={{fontWeight:'bold'}}>Acionado em:</Text> {new Date(oc.criado_em).toLocaleString('pt-BR')}</Text>
               </View>
 
