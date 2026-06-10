@@ -59,7 +59,7 @@ export default function VigilanteHome({ navigation }: any) {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>{nomePosto}</Text>
-        <Text style={styles.subtitle}>Operação de Vigilância Ativa</Text>
+        <Text style={styles.subtitle}>Operação em Andamento</Text>
       </View>
 
       <View style={styles.menuContainer}>
@@ -68,8 +68,8 @@ export default function VigilanteHome({ navigation }: any) {
             <Ionicons name="shield-checkmark-outline" size={32} color="#0284c7" />
           </View>
           <View style={{ flex: 1, marginLeft: 15 }}>
-            <Text style={styles.cardTitle}>Realizar Rondas</Text>
-            <Text style={styles.cardDesc}>Aceder aos roteiros de patrulha e ler QR Codes.</Text>
+            <Text style={styles.cardTitle}>Realizar Inspeções</Text>
+            <Text style={styles.cardDesc}>Aceder aos roteiros de inspeção e ler QR Codes.</Text>
           </View>
           <Ionicons name="chevron-forward" size={24} color="#cbd5e1" />
         </TouchableOpacity>

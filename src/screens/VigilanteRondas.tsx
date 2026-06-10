@@ -194,7 +194,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
       gerenciarAlertasDeRonda(res.data); // Aciona o agendamento de notificação
     } catch (e: any) {
       console.log('Erro ao carregar rotas:', e.response?.data || e.message);
-      Alert.alert('Erro', 'Não foi possível carregar as rondas. Verifique sua conexão.');
+      Alert.alert('Erro', 'Não foi possível carregar as inspeções. Verifique sua conexão.');
     }
   }
 

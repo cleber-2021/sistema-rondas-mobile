@@ -79,7 +79,7 @@ export default function Login({ navigation }: any) {
         setLoading(false);
         return Alert.alert(
           'Acesso restrito',
-          'Este aplicativo é exclusivo para vigilantes e supervisores de campo. Acesse o painel web com este perfil.'
+          'Este aplicativo é exclusivo para operadores e supervisores de campo. Acesse o painel web com este perfil.'
         );
       }
 
