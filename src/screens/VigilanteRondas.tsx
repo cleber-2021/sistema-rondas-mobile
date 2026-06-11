@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Alert, Modal, ScrollView, TextInput, Image, ActivityIndicator, AppState } from 'react-native';
-import * as Location from 'expo-location'; 
+import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as TaskManager from 'expo-task-manager';
@@ -11,12 +11,8 @@ import * as Notifications from 'expo-notifications';
 
 const BACKGROUND_LOCATION_TASK = 'BACKGROUND_LOCATION_TASK';
 
-TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
-  if (error) {
-    console.log('Erro na task de localização em background:', error.message);
-    return;
-  }
-});
+// URL base usada pelo background task (não pode importar o axios instance de dentro do TaskManager)
+const API_BASE = 'https://sulcleansm.ddns.com.br:3443/api';
 
 function calcularDistancia(lat1: number, lon1: number, lat2: number, lon2: number) {
   if (!lat2 || !lon2) return 0;
@@ -25,7 +21,7 @@ function calcularDistancia(lat1: number, lon1: number, lat2: number, lon2: numbe
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return Math.round(R * c); 
+  return Math.round(R * c);
 }
 
 function formatarTempo(segundos: number) {
@@ -34,20 +30,87 @@ function formatarTempo(segundos: number) {
   return `${m}:${s}`;
 }
 
+// ─── BACKGROUND TASK ────────────────────────────────────────────────────────
+// Recebe atualizações de GPS do Android mesmo com a tela bloqueada/app em
+// segundo plano. Lê todo o estado necessário do AsyncStorage (não tem acesso
+// ao estado React) e chama a API diretamente via fetch.
+TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: any) => {
+  if (error) {
+    console.log('Erro na task de localização em background:', error.message);
+    return;
+  }
+
+  const { locations } = data;
+  if (!locations?.length) return;
+  const loc = locations[0];
+
+  try {
+    const [rondaSalva, pontoSalvo, jaRegistrando, token] = await Promise.all([
+      AsyncStorage.getItem('@Ronda:emAndamento'),
+      AsyncStorage.getItem('@Ronda:pontoAtual'),
+      AsyncStorage.getItem('@Ronda:jaRegistrando'),
+      AsyncStorage.getItem('@RondasApp:token'),
+    ]);
+
+    // Ignora se não há ronda ativa, token, ou se já está processando um ponto
+    if (!rondaSalva || !pontoSalvo || !token || jaRegistrando === 'true') return;
+
+    const ronda = JSON.parse(rondaSalva);
+    const ponto = JSON.parse(pontoSalvo);
+
+    // Este task só trata pontos AUTOMÁTICOS (GPS). MANUAL usa QR Code.
+    if (ponto.tipo_validacao !== 'AUTOMATICA') return;
+    if (!ponto.latitude || !ponto.longitude) return;
+
+    const dist = calcularDistancia(
+      loc.coords.latitude, loc.coords.longitude,
+      Number(ponto.latitude), Number(ponto.longitude)
+    );
+
+    if (dist <= Number(ponto.raio_tolerancia)) {
+      // Trava para evitar chamadas duplicadas se o GPS oscilar dentro do raio
+      await AsyncStorage.setItem('@Ronda:jaRegistrando', 'true');
+
+      const res = await fetch(`${API_BASE}/rondas/bater-ponto`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ronda_id: ronda.id,
+          checkpoint_id: ponto.checkpoint_id,
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        }),
+      });
+
+      if (res.ok) {
+        // Sinaliza para o componente React que este ponto foi validado.
+        // Quando o app voltar ao foreground, o polling vai detectar e avançar.
+        await AsyncStorage.setItem('@Ronda:pontoValidado', ponto.checkpoint_id);
+      } else {
+        // Libera para tentar novamente na próxima atualização de GPS
+        await AsyncStorage.setItem('@Ronda:jaRegistrando', 'false');
+      }
+    }
+  } catch (e) {
+    await AsyncStorage.setItem('@Ronda:jaRegistrando', 'false');
+    console.log('Erro no background GPS task:', e);
+  }
+});
+
 export default function VigilanteRondas({ navigation, route }: any) {
   const [rotasDisponiveis, setRotasDisponiveis] = useState<any[]>([]);
   const [rondaEmAndamento, setRondaEmAndamento] = useState<any>(null);
   const [pontoAtual, setPontoAtual] = useState<any>(null);
   const [distanciaAtual, setDistanciaAtual] = useState<number | null>(null);
-  
-  // Cronômetro resiliente
+
   const [tempoRestante, setTempoRestante] = useState<number>(0);
   const [buscandoGps, setBuscandoGps] = useState(false);
-  
-  // Relógio interno da UI para bloqueio de rondas
   const [horaAtualDaUI, setHoraAtualDaUI] = useState(Date.now());
-  
-  // Ref para evitar registrar o mesmo ponto duas vezes se o GPS oscila no raio
+
+  // Ref para deduplicação no foreground (mais rápido que AsyncStorage para o path síncrono)
   const jaRegistrando = useRef(false);
 
   const [modalScanner, setModalScanner] = useState(false);
@@ -60,25 +123,35 @@ export default function VigilanteRondas({ navigation, route }: any) {
   useEffect(() => {
     carregarRotas();
     verificarRondaEmAndamento();
-    
-    // Atualiza o relógio interno a cada 10s para liberar rondas bloqueadas
     const timerRelogio = setInterval(() => setHoraAtualDaUI(Date.now()), 10000);
     return () => clearInterval(timerRelogio);
   }, []);
 
-  
+  // Persiste o pontoAtual no AsyncStorage sempre que muda, para o background task usar
+  useEffect(() => {
+    if (pontoAtual) {
+      AsyncStorage.setItem('@Ronda:pontoAtual', JSON.stringify({
+        checkpoint_id: pontoAtual.checkpoint_id,
+        tipo_validacao: pontoAtual.checkpoints?.tipo_validacao,
+        latitude: pontoAtual.checkpoints?.latitude,
+        longitude: pontoAtual.checkpoints?.longitude,
+        raio_tolerancia: pontoAtual.checkpoints?.raio_tolerancia,
+      }));
+    } else {
+      AsyncStorage.removeItem('@Ronda:pontoAtual');
+    }
+  }, [pontoAtual]);
+
   async function verificarRondaEmAndamento() {
     const salva = await AsyncStorage.getItem('@Ronda:emAndamento');
-    const fim = await AsyncStorage.getItem('@Ronda:fim');
-    if (salva && fim) {
+    if (salva) {
       const ronda = JSON.parse(salva);
       setRondaEmAndamento(ronda);
       setPontoAtual(ronda.pontoAtual);
     }
   }
 
-  // === CORREÇÃO DO CRONÔMETRO === 
-  // Agora ele usa o AppState. Se a tela desligar e ligar, ele recálcula com base na hora real
+  // Cronômetro resiliente baseado no horário real (sobrevive a tela apagada)
   useEffect(() => {
     if (!rondaEmAndamento) return;
 
@@ -95,36 +168,63 @@ export default function VigilanteRondas({ navigation, route }: any) {
     };
 
     const interval = setInterval(sincronizarCronometro, 1000);
-
     const subscription = AppState.addEventListener('change', nextAppState => {
-      if (nextAppState === 'active') {
-        sincronizarCronometro(); // Atualiza na hora que a tela acende
-      }
+      if (nextAppState === 'active') sincronizarCronometro();
     });
 
-    return () => {
-      clearInterval(interval);
-      subscription.remove();
-    };
+    return () => { clearInterval(interval); subscription.remove(); };
   }, [rondaEmAndamento]);
 
+  // ─── POLLING: detecta ponto validado pelo background task ───────────────────
+  // Quando a tela está bloqueada, o background task valida o ponto e grava
+  // '@Ronda:pontoValidado'. Este efeito detecta a flag e avança ao próximo ponto
+  // assim que o app volta ao foreground (ou dentro de 2 segundos).
+  useEffect(() => {
+    if (!rondaEmAndamento || !pontoAtual) return;
+
+    const verificarPontoValidado = async () => {
+      const pontoValidado = await AsyncStorage.getItem('@Ronda:pontoValidado');
+      // Só avança se o ponto validado em background é exatamente o ponto atual
+      if (pontoValidado && pontoValidado === pontoAtual.checkpoint_id) {
+        await AsyncStorage.multiRemove(['@Ronda:pontoValidado', '@Ronda:jaRegistrando']);
+        jaRegistrando.current = false;
+        avancaParaProximoPontoOuFinaliza();
+      }
+    };
+
+    const interval = setInterval(verificarPontoValidado, 2000);
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') verificarPontoValidado();
+    });
+
+    return () => { clearInterval(interval); sub.remove(); };
+  }, [rondaEmAndamento, pontoAtual]);
+
+  // ─── RASTREAMENTO GPS (foreground + background service) ─────────────────────
   useEffect(() => {
     let watchSubscription: Location.LocationSubscription | null = null;
-    jaRegistrando.current = false; // Reseta a cada troca de ponto
+    jaRegistrando.current = false;
 
     async function iniciarRastreamento() {
       if (!rondaEmAndamento || pontoAtual?.checkpoints?.tipo_validacao !== 'AUTOMATICA') return;
 
       try {
-        // Evita chamar startLocationUpdatesAsync se a task já está rodando
         const jaRodando = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK).catch(() => false);
         if (!jaRodando) {
           await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
-            accuracy: Location.Accuracy.BestForNavigation, timeInterval: 3000, distanceInterval: 1,
-            foregroundService: { notificationTitle: "Inspeção Ativa", notificationBody: "Monitorando posição...", notificationColor: "#0284c7" },
+            accuracy: Location.Accuracy.BestForNavigation,
+            timeInterval: 3000,
+            distanceInterval: 1,
+            foregroundService: {
+              notificationTitle: "Inspeção Ativa",
+              notificationBody: "Monitorando posição...",
+              notificationColor: "#0284c7",
+            },
           });
         }
 
+        // watchPositionAsync: atualiza a UI com a distância em tempo real (foreground)
+        // e também valida quando o app está na tela (caminho mais rápido).
         watchSubscription = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 3000, distanceInterval: 1 },
           (loc) => {
@@ -134,9 +234,9 @@ export default function VigilanteRondas({ navigation, route }: any) {
             );
             setDistanciaAtual(dist);
 
-            // Só registra se ainda não está processando — evita chamadas duplas quando GPS oscila no raio
             if (dist <= Number(pontoAtual.checkpoints.raio_tolerancia) && !jaRegistrando.current) {
               jaRegistrando.current = true;
+              AsyncStorage.setItem('@Ronda:jaRegistrando', 'true');
               registrarPontoNaApi(loc.coords.latitude, loc.coords.longitude);
             }
           }
@@ -147,23 +247,15 @@ export default function VigilanteRondas({ navigation, route }: any) {
     }
 
     iniciarRastreamento();
-
-    // Cleanup: remove a subscription ao trocar de ponto ou encerrar ronda
-    return () => {
-      if (watchSubscription) watchSubscription.remove();
-    };
+    return () => { if (watchSubscription) watchSubscription.remove(); };
   }, [rondaEmAndamento, pontoAtual]);
 
   async function gerenciarAlertasDeRonda(rotas: any[]) {
     await Notifications.cancelAllScheduledNotificationsAsync();
     for (const rota of rotas) {
       if (!rota.intervalo_minutos) continue;
-
-      const ultimaTs = rota.ultima_execucao
-        ? new Date(rota.ultima_execucao).getTime()
-        : 0;
+      const ultimaTs = rota.ultima_execucao ? new Date(rota.ultima_execucao).getTime() : 0;
       const proximaTs = ultimaTs + (rota.intervalo_minutos * 60000);
-
       if (proximaTs > Date.now()) {
         await Notifications.scheduleNotificationAsync({
           content: {
@@ -171,12 +263,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
             body: `O roteiro "${rota.nome}" está liberado. Toque para iniciar!`,
             sound: true,
             priority: Notifications.AndroidNotificationPriority.MAX,
-            // ─── CRÍTICO: payload lido pelo listener no App.tsx ───
-            data: {
-              tipo: 'RONDA_LIBERADA',
-              rota_id: rota.id,
-              rota_nome: rota.nome,
-            },
+            data: { tipo: 'RONDA_LIBERADA', rota_id: rota.id, rota_nome: rota.nome },
           },
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.DATE,
@@ -191,7 +278,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
     try {
       const res = await api.get('/rotas');
       setRotasDisponiveis(res.data);
-      gerenciarAlertasDeRonda(res.data); // Aciona o agendamento de notificação
+      gerenciarAlertasDeRonda(res.data);
     } catch (e: any) {
       console.log('Erro ao carregar rotas:', e.response?.data || e.message);
       Alert.alert('Erro', 'Não foi possível carregar as inspeções. Verifique sua conexão.');
@@ -201,66 +288,86 @@ export default function VigilanteRondas({ navigation, route }: any) {
   async function iniciarRonda(rota: any) {
     try {
       const res = await api.post('/rondas/iniciar', { rota_id: rota.id });
-      const r = { ...res.data, rotas: rota, pontoAtual: rota.rota_checkpoints[0] };
-      const fim = Date.now() + ((rota.rota_checkpoints[0].tempo_limite_min || 5) * 60000);
-      
+      const primeiroPonto = rota.rota_checkpoints[0];
+      const r = { ...res.data, rotas: rota, pontoAtual: primeiroPonto };
+      const fim = Date.now() + ((primeiroPonto.tempo_limite_min || 5) * 60000);
+
       await AsyncStorage.setItem('@Ronda:emAndamento', JSON.stringify(r));
       await AsyncStorage.setItem('@Ronda:fim', fim.toString());
-      
+      await AsyncStorage.multiRemove(['@Ronda:pontoValidado', '@Ronda:jaRegistrando']);
+
       setRondaEmAndamento(r);
-      setPontoAtual(rota.rota_checkpoints[0]);
+      setPontoAtual(primeiroPonto);
     } catch (e) { Alert.alert('Erro', 'Falha ao iniciar.'); }
   }
 
   async function registrarPontoNaApi(lat: number, lng: number) {
     if (lat === 0 && lng === 0) {
       Alert.alert("Erro", "Sinal de GPS indisponível. Aguarde a estabilização.");
-      jaRegistrando.current = false; // Permite nova tentativa
+      jaRegistrando.current = false;
+      await AsyncStorage.setItem('@Ronda:jaRegistrando', 'false');
       return;
     }
     try {
-      await api.post('/rondas/bater-ponto', { ronda_id: rondaEmAndamento.id, checkpoint_id: pontoAtual.checkpoint_id, latitude: lat, longitude: lng });
+      await api.post('/rondas/bater-ponto', {
+        ronda_id: rondaEmAndamento.id,
+        checkpoint_id: pontoAtual.checkpoint_id,
+        latitude: lat,
+        longitude: lng,
+      });
       avancaParaProximoPontoOuFinaliza();
     } catch (e) {
       Alert.alert('Falha', 'Erro ao registrar ponto. O GPS vai tentar novamente.');
-      jaRegistrando.current = false; // Permite nova tentativa automática quando GPS atualizar
+      jaRegistrando.current = false;
+      await AsyncStorage.setItem('@Ronda:jaRegistrando', 'false');
     }
   }
 
   async function avancaParaProximoPontoOuFinaliza() {
     const lista = rondaEmAndamento.rotas.rota_checkpoints;
     const idx = lista.findIndex((p: any) => p.checkpoint_id === pontoAtual.checkpoint_id);
+
     if (idx + 1 < lista.length) {
       const prox = lista[idx + 1];
       const r = { ...rondaEmAndamento, pontoAtual: prox };
+      const novoFim = Date.now() + ((prox.tempo_limite_min || 5) * 60000);
+
       setPontoAtual(prox);
       setRondaEmAndamento(r);
-      const novoFim = Date.now() + ((prox.tempo_limite_min || 5) * 60000);
+
       await AsyncStorage.setItem('@Ronda:emAndamento', JSON.stringify(r));
       await AsyncStorage.setItem('@Ronda:fim', novoFim.toString());
+      await AsyncStorage.multiRemove(['@Ronda:pontoValidado', '@Ronda:jaRegistrando']);
+      jaRegistrando.current = false;
     } else {
       await api.post('/rondas/encerrar', { ronda_id: rondaEmAndamento.id });
-      await AsyncStorage.multiRemove(['@Ronda:emAndamento', '@Ronda:fim']);
+      await AsyncStorage.multiRemove(['@Ronda:emAndamento', '@Ronda:fim', '@Ronda:pontoAtual', '@Ronda:pontoValidado', '@Ronda:jaRegistrando']);
       setRondaEmAndamento(null);
-      Alert.alert('Sucesso', 'Inspeção finalizada!');
-      carregarRotas(); // Recarrega para bloquear a próxima
+      setPontoAtual(null);
+      Alert.alert('✅ Sucesso', 'Inspeção finalizada!');
+      carregarRotas();
     }
   }
 
   async function registrarFalhaPorTempo() {
-    await api.post('/rondas/falhar-ponto', { ronda_id: rondaEmAndamento.id, checkpoint_id: pontoAtual.checkpoint_id });
+    await api.post('/rondas/falhar-ponto', {
+      ronda_id: rondaEmAndamento.id,
+      checkpoint_id: pontoAtual.checkpoint_id,
+    });
     avancaParaProximoPontoOuFinaliza();
   }
 
   async function abrirScanner() {
-    if (!permissaoCamera?.granted) { const res = await pedirPermissaoCamera(); if (!res.granted) return; }
+    if (!permissaoCamera?.granted) {
+      const res = await pedirPermissaoCamera();
+      if (!res.granted) return;
+    }
     setModalScanner(true);
   }
 
   async function handleBarCodeScanned({ data }: { data: string }) {
     setModalScanner(false);
     if (data !== pontoAtual.checkpoint_id) return Alert.alert('❌ Erro', 'QR Code incorreto.');
-    
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
@@ -273,56 +380,100 @@ export default function VigilanteRondas({ navigation, route }: any) {
     }
   }
 
+  async function tirarFotoOcorrencia() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    const { status: statusCamera } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted' && statusCamera !== 'granted') {
+      Alert.alert('Permissão negada', 'Permite o acesso à câmara ou galeria nas configurações.');
+      return;
+    }
+    Alert.alert('Foto da Ocorrência', 'Como deseja adicionar a foto?', [
+      {
+        text: 'Câmara', onPress: async () => {
+          const res = await ImagePicker.launchCameraAsync({ base64: true, quality: 0.5 });
+          if (!res.canceled && res.assets[0].base64) {
+            setFotoBase64(`data:image/jpeg;base64,${res.assets[0].base64}`);
+          }
+        }
+      },
+      {
+        text: 'Galeria', onPress: async () => {
+          const res = await ImagePicker.launchImageLibraryAsync({ base64: true, quality: 0.5 });
+          if (!res.canceled && res.assets[0].base64) {
+            setFotoBase64(`data:image/jpeg;base64,${res.assets[0].base64}`);
+          }
+        }
+      },
+      { text: 'Cancelar', style: 'cancel' },
+    ]);
+  }
+
   async function enviarOcorrenciaDuranteRonda() {
+    if (!descricaoOcorrencia.trim()) {
+      Alert.alert('Atenção', 'Descreva a ocorrência antes de enviar.');
+      return;
+    }
     setLoadingOco(true);
     try {
-      await api.post('/ocorrencias', { ronda_id: rondaEmAndamento.id, checkpoint_id: pontoAtual.checkpoint_id, titulo: 'Ocorrência', descricao: descricaoOcorrencia, foto_base64: fotoBase64 });
-      Alert.alert('Sucesso', 'Enviado!'); setModalOcorrencia(false);
+      await api.post('/ocorrencias', {
+        ronda_id: rondaEmAndamento.id,
+        checkpoint_id: pontoAtual.checkpoint_id,
+        titulo: 'Ocorrência registrada via App',
+        descricao: descricaoOcorrencia,
+        foto_base64: fotoBase64 || undefined,
+      });
+      Alert.alert('✅ Enviado', 'Ocorrência registrada com sucesso!');
+      setModalOcorrencia(false);
+      setDescricaoOcorrencia('');
+      setFotoBase64(null);
     } catch (e: any) {
-      console.log('Erro ao enviar ocorrência da ronda:', e.response?.data || e.message);
+      console.log('Erro ao enviar ocorrência:', e.response?.data || e.message);
       Alert.alert('Erro', 'Falha ao enviar a ocorrência.');
-    } finally { setLoadingOco(false); }
+    } finally {
+      setLoadingOco(false);
+    }
   }
 
   function interromperPatrulhaManual() {
     Alert.alert("⚠️ Interromper", "Deseja realmente abandonar a inspeção?", [
       { text: "Continuar", style: "cancel" },
-      { text: "Abandonar", style: "destructive", onPress: async () => {
-          try { await api.post('/rondas/encerrar', { ronda_id: rondaEmAndamento.id, abandonada: true }); } catch(e: any) { console.log('Erro ao abandonar ronda (encerrando localmente mesmo assim):', e.response?.data || e.message); }
-          await AsyncStorage.multiRemove(['@Ronda:emAndamento', '@Ronda:fim']);
+      {
+        text: "Abandonar", style: "destructive", onPress: async () => {
+          try {
+            await api.post('/rondas/encerrar', { ronda_id: rondaEmAndamento.id, abandonada: true });
+          } catch (e: any) {
+            console.log('Erro ao abandonar:', e.response?.data || e.message);
+          }
+          await AsyncStorage.multiRemove(['@Ronda:emAndamento', '@Ronda:fim', '@Ronda:pontoAtual', '@Ronda:pontoValidado', '@Ronda:jaRegistrando']);
           setRondaEmAndamento(null);
           setPontoAtual(null);
           carregarRotas();
-      }}
+        }
+      }
     ]);
   }
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 15, position: 'absolute', top: 60, left: 20, zIndex: 10 }}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ position: 'absolute', top: 60, left: 20, zIndex: 10 }}>
           <Ionicons name="arrow-back" size={28} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.title}>{rondaEmAndamento ? 'Inspeção em Andamento' : 'Suas Inspeções'}</Text>
       </View>
-      
+
       {!rondaEmAndamento ? (
         <ScrollView style={{ padding: 20 }}>
-          {/* === CORREÇÃO DA LISTA DE RONDAS BLOQUEADAS === */}
           {rotasDisponiveis.map(rota => {
             const ultimaExecucaoTs = rota.ultima_execucao ? new Date(rota.ultima_execucao).getTime() : 0;
             const intervaloMs = (rota.intervalo_minutos || 0) * 60000;
             const proximaExecucaoTs = ultimaExecucaoTs + intervaloMs;
-            
-            // Liberada se: não tem intervalo, nunca foi executada, ou já passou o tempo
             const liberada = !rota.intervalo_minutos || ultimaExecucaoTs === 0 || horaAtualDaUI >= proximaExecucaoTs;
 
             let textoBotao = 'Iniciar';
             let corBotao = '#0284c7';
-            
             if (!liberada) {
               const dataProxima = new Date(proximaExecucaoTs);
-              // Garante que horas e minutos são números válidos antes de formatar
               if (!isNaN(dataProxima.getTime())) {
                 const hh = dataProxima.getHours().toString().padStart(2, '0');
                 const mm = dataProxima.getMinutes().toString().padStart(2, '0');
@@ -336,21 +487,21 @@ export default function VigilanteRondas({ navigation, route }: any) {
             return (
               <View key={rota.id} style={styles.rotaCard}>
                 <View>
-                  <Text style={{fontWeight: 'bold', fontSize: 16}}>{rota.nome}</Text>
-                  <Text style={{color: '#64748b'}}>{rota.rota_checkpoints?.length || 0} pontos a visitar</Text>
+                  <Text style={{ fontWeight: 'bold', fontSize: 16 }}>{rota.nome}</Text>
+                  <Text style={{ color: '#64748b' }}>{rota.rota_checkpoints?.length || 0} pontos a visitar</Text>
                 </View>
-                <TouchableOpacity 
-                  style={[styles.btnIniciar, { backgroundColor: corBotao }]} 
+                <TouchableOpacity
+                  style={[styles.btnIniciar, { backgroundColor: corBotao }]}
                   onPress={() => liberada ? iniciarRonda(rota) : Alert.alert('Aguarde', `Esta inspeção só estará liberada às ${textoBotao.replace('⏳ Às ', '')}.`)}
                 >
-                  <Text style={{color: '#fff', fontWeight: 'bold'}}>{textoBotao}</Text>
+                  <Text style={{ color: '#fff', fontWeight: 'bold' }}>{textoBotao}</Text>
                 </TouchableOpacity>
               </View>
             );
           })}
         </ScrollView>
       ) : (
-         <View style={styles.areaRonda}>
+        <View style={styles.areaRonda}>
           <Text style={styles.timer}>⏱️ {formatarTempo(tempoRestante)}</Text>
           <Text style={styles.pontoNome}>{pontoAtual?.checkpoints.nome}</Text>
 
@@ -371,9 +522,74 @@ export default function VigilanteRondas({ navigation, route }: any) {
           <TouchableOpacity style={[styles.btnAcao, { backgroundColor: '#64748b', marginTop: 15 }]} onPress={interromperPatrulhaManual}>
             <Text style={styles.btnAcaoText}>⏹️ Interromper Inspeção</Text>
           </TouchableOpacity>
-      </View>
+        </View>
       )}
-      <Modal visible={modalScanner} animationType="slide"><CameraView style={StyleSheet.absoluteFillObject} facing="back" onBarcodeScanned={handleBarCodeScanned} /></Modal>
+
+      {/* Modal: Leitor de QR Code */}
+      <Modal visible={modalScanner} animationType="slide">
+        <CameraView style={StyleSheet.absoluteFillObject} facing="back" onBarcodeScanned={handleBarCodeScanned} />
+        <TouchableOpacity
+          style={{ position: 'absolute', top: 50, right: 20, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 20, padding: 10 }}
+          onPress={() => setModalScanner(false)}
+        >
+          <Ionicons name="close" size={28} color="#fff" />
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Modal: Registrar Ocorrência */}
+      <Modal visible={modalOcorrencia} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitulo}>⚠️ Registrar Ocorrência</Text>
+
+            <TextInput
+              style={styles.inputDescricao}
+              placeholder="Descreva o problema observado..."
+              placeholderTextColor="#94a3b8"
+              value={descricaoOcorrencia}
+              onChangeText={setDescricaoOcorrencia}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+
+            <TouchableOpacity style={styles.btnFoto} onPress={tirarFotoOcorrencia}>
+              <Ionicons name="camera-outline" size={20} color="#0284c7" />
+              <Text style={styles.btnFotoText}>{fotoBase64 ? '✅ Foto Adicionada' : 'Adicionar Foto'}</Text>
+            </TouchableOpacity>
+
+            {fotoBase64 && (
+              <View style={{ alignItems: 'center', marginBottom: 10 }}>
+                <Image source={{ uri: fotoBase64 }} style={{ width: 120, height: 90, borderRadius: 8 }} />
+                <TouchableOpacity onPress={() => setFotoBase64(null)}>
+                  <Text style={{ color: '#dc2626', fontSize: 12, marginTop: 4 }}>Remover foto</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                style={[styles.btnModal, { backgroundColor: '#64748b', flex: 1 }]}
+                onPress={() => { setModalOcorrencia(false); setDescricaoOcorrencia(''); setFotoBase64(null); }}
+                disabled={loadingOco}
+              >
+                <Text style={styles.btnModalText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.btnModal, { backgroundColor: '#dc2626', flex: 1 }]}
+                onPress={enviarOcorrenciaDuranteRonda}
+                disabled={loadingOco}
+              >
+                {loadingOco
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={styles.btnModalText}>Enviar</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -388,5 +604,14 @@ const styles = StyleSheet.create({
   btnIniciar: { padding: 12, borderRadius: 8, paddingHorizontal: 20 },
   btnAcao: { backgroundColor: '#ea580c', padding: 15, borderRadius: 8, width: '90%', alignItems: 'center' },
   btnAcaoText: { color: '#fff', fontWeight: 'bold' },
-  areaRonda: { flex: 1, alignItems: 'center', padding: 20 }
+  areaRonda: { flex: 1, alignItems: 'center', padding: 20 },
+  // Modal de ocorrência
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalCard: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 25, paddingBottom: 40 },
+  modalTitulo: { fontSize: 18, fontWeight: 'bold', color: '#1e293b', marginBottom: 15 },
+  inputDescricao: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, padding: 12, fontSize: 15, color: '#1e293b', minHeight: 100, marginBottom: 12 },
+  btnFoto: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderWidth: 1, borderColor: '#0284c7', borderRadius: 8, marginBottom: 12 },
+  btnFotoText: { color: '#0284c7', fontWeight: '600' },
+  btnModal: { padding: 14, borderRadius: 8, alignItems: 'center' },
+  btnModalText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
 });
