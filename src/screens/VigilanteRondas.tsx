@@ -250,24 +250,41 @@ export default function VigilanteRondas({ navigation, route }: any) {
     return () => { if (watchSubscription) watchSubscription.remove(); };
   }, [rondaEmAndamento, pontoAtual]);
 
+  // Calcula o slot fixo atual: hora_inicio + N × intervalo (independe da última execução)
+  function calcularSlotAtual(horaInicio: string | null, intervaloMin: number): { slotTs: number; proximoSlotTs: number } {
+    const agora = Date.now();
+    const intervaloMs = intervaloMin * 60_000;
+    const base = new Date();
+    if (horaInicio) {
+      const [h, m] = horaInicio.split(':').map(Number);
+      base.setHours(h, m, 0, 0);
+    } else {
+      base.setHours(0, 0, 0, 0);
+    }
+    const baseTs = base.getTime();
+    if (agora < baseTs) return { slotTs: baseTs, proximoSlotTs: baseTs + intervaloMs };
+    const slots = Math.floor((agora - baseTs) / intervaloMs);
+    const slotTs = baseTs + slots * intervaloMs;
+    return { slotTs, proximoSlotTs: slotTs + intervaloMs };
+  }
+
   async function gerenciarAlertasDeRonda(rotas: any[]) {
     await Notifications.cancelAllScheduledNotificationsAsync();
     for (const rota of rotas) {
       if (!rota.intervalo_minutos) continue;
-      const ultimaTs = rota.ultima_execucao ? new Date(rota.ultima_execucao).getTime() : 0;
-      const proximaTs = ultimaTs + (rota.intervalo_minutos * 60000);
-      if (proximaTs > Date.now()) {
+      const { proximoSlotTs } = calcularSlotAtual(rota.hora_inicio ?? null, rota.intervalo_minutos);
+      if (proximoSlotTs > Date.now()) {
         await Notifications.scheduleNotificationAsync({
           content: {
             title: '⏰ Hora da Inspeção!',
-            body: `O roteiro "${rota.nome}" está liberado. Toque para iniciar!`,
+            body: `O roteiro "${rota.nome}" está liberado. Você tem 10 minutos para iniciar!`,
             sound: true,
             priority: Notifications.AndroidNotificationPriority.MAX,
             data: { tipo: 'RONDA_LIBERADA', rota_id: rota.id, rota_nome: rota.nome },
           },
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.DATE,
-            date: new Date(proximaTs),
+            date: new Date(proximoSlotTs),
           },
         });
       }
@@ -465,36 +482,71 @@ export default function VigilanteRondas({ navigation, route }: any) {
       {!rondaEmAndamento ? (
         <ScrollView style={{ padding: 20 }}>
           {rotasDisponiveis.map(rota => {
-            const ultimaExecucaoTs = rota.ultima_execucao ? new Date(rota.ultima_execucao).getTime() : 0;
-            const intervaloMs = (rota.intervalo_minutos || 0) * 60000;
-            const proximaExecucaoTs = ultimaExecucaoTs + intervaloMs;
-            const liberada = !rota.intervalo_minutos || ultimaExecucaoTs === 0 || horaAtualDaUI >= proximaExecucaoTs;
+            const TOLERANCIA_MS = 10 * 60_000;
+            const intervaloMs = (rota.intervalo_minutos || 0) * 60_000;
 
+            // Sem intervalo configurado → sempre liberada
+            if (!rota.intervalo_minutos) {
+              return (
+                <View key={rota.id} style={styles.rotaCard}>
+                  <View>
+                    <Text style={{ fontWeight: 'bold', fontSize: 16 }}>{rota.nome}</Text>
+                    <Text style={{ color: '#64748b' }}>{rota.rota_checkpoints?.length || 0} pontos a visitar</Text>
+                  </View>
+                  <TouchableOpacity style={[styles.btnIniciar, { backgroundColor: '#0284c7' }]} onPress={() => iniciarRonda(rota)}>
+                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>Iniciar</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            }
+
+            const { slotTs, proximoSlotTs } = calcularSlotAtual(rota.hora_inicio ?? null, rota.intervalo_minutos);
+
+            // Verifica se já foi executada neste slot
+            const ultimaExecTs = rota.ultima_execucao ? new Date(rota.ultima_execucao).getTime() : 0;
+            const execucaoNoSlot = ultimaExecTs >= slotTs && ultimaExecTs < slotTs + intervaloMs;
+
+            // Liberada: dentro da janela de 10 min E sem execução no slot atual
+            const dentroJanela = horaAtualDaUI >= slotTs && horaAtualDaUI < slotTs + TOLERANCIA_MS;
+            const liberada = dentroJanela && !execucaoNoSlot;
+
+            // Texto e cor do botão
             let textoBotao = 'Iniciar';
             let corBotao = '#0284c7';
             if (!liberada) {
-              const dataProxima = new Date(proximaExecucaoTs);
-              if (!isNaN(dataProxima.getTime())) {
-                const hh = dataProxima.getHours().toString().padStart(2, '0');
-                const mm = dataProxima.getMinutes().toString().padStart(2, '0');
-                textoBotao = `⏳ Às ${hh}:${mm}`;
-              } else {
-                textoBotao = '⏳ Aguardando';
-              }
-              corBotao = '#94a3b8';
+              const referencia = execucaoNoSlot || horaAtualDaUI >= slotTs + TOLERANCIA_MS ? proximoSlotTs : slotTs;
+              const proxData = new Date(referencia);
+              const hh = proxData.getHours().toString().padStart(2, '0');
+              const mm = proxData.getMinutes().toString().padStart(2, '0');
+              textoBotao = execucaoNoSlot ? `✅ Próx. às ${hh}:${mm}` : `⏳ Às ${hh}:${mm}`;
+              corBotao = execucaoNoSlot ? '#16a34a' : '#94a3b8';
             }
 
             return (
               <View key={rota.id} style={styles.rotaCard}>
-                <View>
+                <View style={{ flex: 1, marginRight: 10 }}>
                   <Text style={{ fontWeight: 'bold', fontSize: 16 }}>{rota.nome}</Text>
                   <Text style={{ color: '#64748b' }}>{rota.rota_checkpoints?.length || 0} pontos a visitar</Text>
+                  {dentroJanela && !execucaoNoSlot && (
+                    <Text style={{ color: '#dc2626', fontSize: 12, marginTop: 2 }}>
+                      ⚠️ Encerra em {Math.max(0, Math.floor((slotTs + TOLERANCIA_MS - horaAtualDaUI) / 60_000))} min
+                    </Text>
+                  )}
                 </View>
                 <TouchableOpacity
                   style={[styles.btnIniciar, { backgroundColor: corBotao }]}
-                  onPress={() => liberada ? iniciarRonda(rota) : Alert.alert('Aguarde', `Esta inspeção só estará liberada às ${textoBotao.replace('⏳ Às ', '')}.`)}
+                  onPress={() => {
+                    if (liberada) {
+                      iniciarRonda(rota);
+                    } else {
+                      const msg = execucaoNoSlot
+                        ? `Inspeção já realizada neste horário. Próxima disponível às ${textoBotao.replace('✅ Próx. às ', '')}.`
+                        : `Esta inspeção só estará disponível às ${textoBotao.replace('⏳ Às ', '')} por 10 minutos.`;
+                      Alert.alert('Inspeção bloqueada', msg);
+                    }
+                  }}
                 >
-                  <Text style={{ color: '#fff', fontWeight: 'bold' }}>{textoBotao}</Text>
+                  <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 12, textAlign: 'center' }}>{textoBotao}</Text>
                 </TouchableOpacity>
               </View>
             );
