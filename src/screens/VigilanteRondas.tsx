@@ -120,6 +120,14 @@ export default function VigilanteRondas({ navigation, route }: any) {
   const [fotoBase64, setFotoBase64] = useState<string | null>(null);
   const [loadingOco, setLoadingOco] = useState(false);
 
+  // === CHECKLIST DE INSPEÇÃO (preenchido ao concluir a última checagem) ===
+  const [modalChecklist, setModalChecklist] = useState(false);
+  const [checklistAtivo, setChecklistAtivo] = useState<any>(null);
+  const [respostasChecklist, setRespostasChecklist] = useState<any>({});
+  const [loadingChecklist, setLoadingChecklist] = useState(false);
+  const [salvandoChecklist, setSalvandoChecklist] = useState(false);
+  const rondaParaFinalizar = useRef<any>(null);
+
   useEffect(() => {
     carregarRotas();
     verificarRondaEmAndamento();
@@ -357,12 +365,83 @@ export default function VigilanteRondas({ navigation, route }: any) {
       await AsyncStorage.multiRemove(['@Ronda:pontoValidado', '@Ronda:jaRegistrando']);
       jaRegistrando.current = false;
     } else {
-      await api.post('/rondas/encerrar', { ronda_id: rondaEmAndamento.id });
-      await AsyncStorage.multiRemove(['@Ronda:emAndamento', '@Ronda:fim', '@Ronda:pontoAtual', '@Ronda:pontoValidado', '@Ronda:jaRegistrando']);
-      setRondaEmAndamento(null);
-      setPontoAtual(null);
-      Alert.alert('✅ Sucesso', 'Inspeção finalizada!');
-      carregarRotas();
+      const checklistId = rondaEmAndamento.rotas?.checklist_id;
+      if (checklistId) {
+        rondaParaFinalizar.current = rondaEmAndamento;
+        await abrirChecklistInspecao(checklistId);
+      } else {
+        await encerrarRondaDefinitivamente(rondaEmAndamento.id);
+      }
+    }
+  }
+
+  async function encerrarRondaDefinitivamente(ronda_id: string) {
+    await api.post('/rondas/encerrar', { ronda_id });
+    await AsyncStorage.multiRemove(['@Ronda:emAndamento', '@Ronda:fim', '@Ronda:pontoAtual', '@Ronda:pontoValidado', '@Ronda:jaRegistrando']);
+    setRondaEmAndamento(null);
+    setPontoAtual(null);
+    Alert.alert('✅ Sucesso', 'Inspeção finalizada!');
+    carregarRotas();
+  }
+
+  async function abrirChecklistInspecao(checklistId: string) {
+    setLoadingChecklist(true);
+    try {
+      const res = await api.get(`/checklists-inspecao/${checklistId}`);
+      const checklist = res.data;
+      const initial: any = {};
+      checklist.perguntas.forEach((p: any) => {
+        initial[p.id] = { pergunta_id: p.id, resposta: 'Conforme', observacao: '', foto_base64: null };
+      });
+      setRespostasChecklist(initial);
+      setChecklistAtivo(checklist);
+      setModalChecklist(true);
+    } catch (e) {
+      // Se falhar ao buscar o checklist, não bloqueia o vigilante: encerra normalmente
+      Alert.alert('Aviso', 'Não foi possível carregar o checklist. A inspeção será finalizada sem ele.');
+      await encerrarRondaDefinitivamente(rondaParaFinalizar.current.id);
+    } finally {
+      setLoadingChecklist(false);
+    }
+  }
+
+  function atualizarRespostaChecklist(perguntaId: string, campo: string, valor: any) {
+    setRespostasChecklist((prev: any) => ({
+      ...prev, [perguntaId]: { ...prev[perguntaId], [campo]: valor }
+    }));
+  }
+
+  async function tirarFotoChecklist(perguntaId: string) {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') return Alert.alert('Aviso', 'Precisamos da câmera.');
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [4, 3], quality: 0.3, base64: true });
+    if (!result.canceled && result.assets && result.assets[0].base64) {
+      atualizarRespostaChecklist(perguntaId, 'foto_base64', `data:image/jpeg;base64,${result.assets[0].base64}`);
+    }
+  }
+
+  async function finalizarComChecklist() {
+    for (const p of checklistAtivo.perguntas) {
+      if (p.exige_foto && !respostasChecklist[p.id]?.foto_base64) {
+        return Alert.alert('Atenção', `A pergunta "${p.pergunta}" exige uma foto.`);
+      }
+    }
+    setSalvandoChecklist(true);
+    try {
+      const respostasArray = Object.values(respostasChecklist);
+      const ronda = rondaParaFinalizar.current;
+      await api.post('/checklists-inspecao/responder', {
+        checklist_id: checklistAtivo.id,
+        ronda_exec_id: ronda.id,
+        respostas: respostasArray,
+      });
+      setModalChecklist(false);
+      setChecklistAtivo(null);
+      await encerrarRondaDefinitivamente(ronda.id);
+    } catch (e) {
+      Alert.alert('Erro', 'Falha ao salvar o checklist. Tente novamente.');
+    } finally {
+      setSalvandoChecklist(false);
     }
   }
 
@@ -642,12 +721,72 @@ export default function VigilanteRondas({ navigation, route }: any) {
           </View>
         </View>
       </Modal>
+
+      {/* === MODAL DO CHECKLIST DE INSPEÇÃO === */}
+      <Modal visible={modalChecklist} animationType="slide">
+        <View style={{ flex: 1, backgroundColor: '#f8fafc', paddingTop: 50 }}>
+          <ScrollView contentContainerStyle={{ padding: 20 }}>
+            <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#1e293b', marginBottom: 5, textAlign: 'center' }}>{checklistAtivo?.titulo}</Text>
+            {checklistAtivo?.descricao ? (
+              <Text style={{ fontSize: 13, color: '#64748b', marginBottom: 15, textAlign: 'center' }}>{checklistAtivo.descricao}</Text>
+            ) : null}
+            <Text style={{ fontSize: 14, color: '#64748b', marginBottom: 25, textAlign: 'center' }}>Responda para concluir a inspeção.</Text>
+
+            {checklistAtivo?.perguntas.map((p: any, index: number) => (
+              <View key={p.id} style={{ backgroundColor: '#fff', padding: 20, borderRadius: 8, marginBottom: 15, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#334155', marginBottom: 15 }}>{index + 1}. {p.pergunta}</Text>
+
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15 }}>
+                  <TouchableOpacity style={[styles.btnToggleChk, respostasChecklist[p.id]?.resposta === 'Conforme' ? { backgroundColor: '#10b981', borderColor: '#10b981' } : {}]} onPress={() => atualizarRespostaChecklist(p.id, 'resposta', 'Conforme')}>
+                    <Text style={{ color: respostasChecklist[p.id]?.resposta === 'Conforme' ? '#fff' : '#64748b', fontWeight: 'bold' }}>Conforme</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.btnToggleChk, respostasChecklist[p.id]?.resposta === 'Não Conforme' ? { backgroundColor: '#ef4444', borderColor: '#ef4444' } : {}]} onPress={() => atualizarRespostaChecklist(p.id, 'resposta', 'Não Conforme')}>
+                    <Text style={{ color: respostasChecklist[p.id]?.resposta === 'Não Conforme' ? '#fff' : '#64748b', fontWeight: 'bold' }}>Não Conforme</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.btnToggleChk, respostasChecklist[p.id]?.resposta === 'N/A' ? { backgroundColor: '#94a3b8', borderColor: '#94a3b8' } : {}]} onPress={() => atualizarRespostaChecklist(p.id, 'resposta', 'N/A')}>
+                    <Text style={{ color: respostasChecklist[p.id]?.resposta === 'N/A' ? '#fff' : '#64748b', fontWeight: 'bold' }}>N/A</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TextInput
+                  style={[styles.inputAreaChk, { height: 45, marginBottom: p.exige_foto ? 15 : 0 }]}
+                  placeholder="Observações (Opcional)..."
+                  placeholderTextColor="#94a3b8"
+                  value={respostasChecklist[p.id]?.observacao}
+                  onChangeText={txt => atualizarRespostaChecklist(p.id, 'observacao', txt)}
+                />
+
+                {p.exige_foto && (
+                  <TouchableOpacity style={[styles.btnCameraChk, { backgroundColor: respostasChecklist[p.id]?.foto_base64 ? '#10b981' : '#475569' }]} onPress={() => tirarFotoChecklist(p.id)}>
+                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>{respostasChecklist[p.id]?.foto_base64 ? '📸 Imagem Capturada' : '📸 Tirar Foto (Obrigatório)'}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
+
+            <View style={{ marginTop: 10, paddingBottom: 40 }}>
+              <TouchableOpacity style={{ padding: 15, backgroundColor: '#2563eb', borderRadius: 8, alignItems: 'center' }} onPress={finalizarComChecklist} disabled={salvandoChecklist}>
+                {salvandoChecklist ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: 'bold' }}>🚀 Concluir Inspeção</Text>}
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {loadingChecklist && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator color="#fff" size="large" />
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
+  btnToggleChk: { flex: 1, padding: 12, borderRadius: 6, borderWidth: 1, borderColor: '#cbd5e1', alignItems: 'center', justifyContent: 'center' },
+  inputAreaChk: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, paddingHorizontal: 15, fontSize: 14, color: '#1e293b' },
+  btnCameraChk: { padding: 15, borderRadius: 8, alignItems: 'center' },
   header: { padding: 25, paddingTop: 60, backgroundColor: '#1e293b', alignItems: 'center' },
   title: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
   timer: { fontSize: 50, fontWeight: 'bold', color: '#dc2626', marginVertical: 20 },
