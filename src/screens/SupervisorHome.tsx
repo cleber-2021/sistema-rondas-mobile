@@ -15,6 +15,8 @@ export default function SupervisorHome({ navigation }: any) {
       if (userString) setNome(JSON.parse(userString).nome);
     }
     carregarUser();
+    // Cancela todas as notificações de inspeção agendadas — supervisor não deve recebê-las
+    Notifications.cancelAllScheduledNotificationsAsync();
   }, []);
 
   // Monitoramento de Pânico (Polling com Notificação Nativa)

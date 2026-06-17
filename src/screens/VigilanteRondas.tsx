@@ -278,6 +278,12 @@ export default function VigilanteRondas({ navigation, route }: any) {
   }
 
   async function gerenciarAlertasDeRonda(rotas: any[]) {
+    // Só agenda notificações para vigilantes (POSTO_SERVICO)
+    const userStr = await AsyncStorage.getItem('@RondasApp:user');
+    if (userStr) {
+      const u = JSON.parse(userStr);
+      if (u.perfil !== 'POSTO_SERVICO') return;
+    }
     await Notifications.cancelAllScheduledNotificationsAsync();
     for (const rota of rotas) {
       if (!rota.intervalo_minutos) continue;

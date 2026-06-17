@@ -117,8 +117,15 @@ export default function App() {
 
       // 2. Agora fazemos as checagens chamando a função recém-criada
       if (data?.tipo === 'RONDA_LIBERADA' && data?.rota_id) {
-        tentarNavegar('VigilanteRondas', { rota_id_auto: data.rota_id });
-      } 
+        // Só navega para rondas se for vigilante — supervisor não recebe estas notificações
+        AsyncStorage.getItem('@RondasApp:user').then(userStr => {
+          if (!userStr) return;
+          const u = JSON.parse(userStr);
+          if (u.perfil === 'POSTO_SERVICO') {
+            tentarNavegar('VigilanteRondas', { rota_id_auto: data.rota_id });
+          }
+        });
+      }
       else if (data?.tipo === 'PANICO') {
         // 👇 Joga o Supervisor direto para a tela de desarme de alarme
         tentarNavegar('SupervisorPanico'); 

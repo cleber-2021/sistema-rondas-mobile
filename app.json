@@ -2,7 +2,7 @@
   "expo": {
     "name": "SSI Inspeção",
     "slug": "sulclean-rondas",
-    "version": "1.0.10",
+    "version": "1.0.11",
     "orientation": "portrait",
     "icon": "./assets/logo_fundo_preto.png",
     "userInterfaceStyle": "light",
