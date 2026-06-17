@@ -127,6 +127,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
   const [loadingChecklist, setLoadingChecklist] = useState(false);
   const [salvandoChecklist, setSalvandoChecklist] = useState(false);
   const rondaParaFinalizar = useRef<any>(null);
+  const proximoIdxAposChecklist = useRef<number>(-1);
 
   useEffect(() => {
     carregarRotas();
@@ -281,6 +282,20 @@ export default function VigilanteRondas({ navigation, route }: any) {
     for (const rota of rotas) {
       if (!rota.intervalo_minutos) continue;
       const { proximoSlotTs } = calcularSlotAtual(rota.hora_inicio ?? null, rota.intervalo_minutos);
+
+      // Não agenda se o próximo slot já passou de hora_fim
+      if (rota.hora_fim) {
+        const [fh, fm] = rota.hora_fim.split(':').map(Number);
+        const fimHoje = new Date(proximoSlotTs);
+        fimHoje.setHours(fh, fm, 0, 0);
+        // Turno noturno: hora_fim < hora_inicio → fim é no dia seguinte
+        if (rota.hora_inicio) {
+          const [ih] = rota.hora_inicio.split(':').map(Number);
+          if (fh < ih) fimHoje.setDate(fimHoje.getDate() + 1);
+        }
+        if (proximoSlotTs >= fimHoje.getTime()) continue;
+      }
+
       if (proximoSlotTs > Date.now()) {
         await Notifications.scheduleNotificationAsync({
           content: {
@@ -352,9 +367,23 @@ export default function VigilanteRondas({ navigation, route }: any) {
     const lista = rondaEmAndamento.rotas.rota_checkpoints;
     const idx = lista.findIndex((p: any) => p.checkpoint_id === pontoAtual.checkpoint_id);
 
-    if (idx + 1 < lista.length) {
-      const prox = lista[idx + 1];
-      const r = { ...rondaEmAndamento, pontoAtual: prox };
+    // Verifica se o checkpoint atual tem checklist vinculado
+    const checklistId = pontoAtual.checklist_id;
+    if (checklistId) {
+      rondaParaFinalizar.current = rondaEmAndamento;
+      proximoIdxAposChecklist.current = idx + 1;
+      await abrirChecklistInspecao(checklistId);
+      return;
+    }
+
+    await avancarParaIndice(rondaEmAndamento, idx + 1);
+  }
+
+  async function avancarParaIndice(ronda: any, nextIdx: number) {
+    const lista = ronda.rotas.rota_checkpoints;
+    if (nextIdx < lista.length) {
+      const prox = lista[nextIdx];
+      const r = { ...ronda, pontoAtual: prox };
       const novoFim = Date.now() + ((prox.tempo_limite_min || 5) * 60000);
 
       setPontoAtual(prox);
@@ -365,13 +394,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
       await AsyncStorage.multiRemove(['@Ronda:pontoValidado', '@Ronda:jaRegistrando']);
       jaRegistrando.current = false;
     } else {
-      const checklistId = rondaEmAndamento.rotas?.checklist_id;
-      if (checklistId) {
-        rondaParaFinalizar.current = rondaEmAndamento;
-        await abrirChecklistInspecao(checklistId);
-      } else {
-        await encerrarRondaDefinitivamente(rondaEmAndamento.id);
-      }
+      await encerrarRondaDefinitivamente(ronda.id);
     }
   }
 
@@ -397,9 +420,9 @@ export default function VigilanteRondas({ navigation, route }: any) {
       setChecklistAtivo(checklist);
       setModalChecklist(true);
     } catch (e) {
-      // Se falhar ao buscar o checklist, não bloqueia o vigilante: encerra normalmente
-      Alert.alert('Aviso', 'Não foi possível carregar o checklist. A inspeção será finalizada sem ele.');
-      await encerrarRondaDefinitivamente(rondaParaFinalizar.current.id);
+      // Se falhar ao buscar o checklist, não bloqueia o vigilante: continua normalmente
+      Alert.alert('Aviso', 'Não foi possível carregar o checklist. Continuando sem ele.');
+      await avancarParaIndice(rondaParaFinalizar.current, proximoIdxAposChecklist.current);
     } finally {
       setLoadingChecklist(false);
     }
@@ -437,7 +460,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
       });
       setModalChecklist(false);
       setChecklistAtivo(null);
-      await encerrarRondaDefinitivamente(ronda.id);
+      await avancarParaIndice(ronda, proximoIdxAposChecklist.current);
     } catch (e) {
       Alert.alert('Erro', 'Falha ao salvar o checklist. Tente novamente.');
     } finally {
