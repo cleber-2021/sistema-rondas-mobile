@@ -2,12 +2,14 @@
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { LogBox, Platform, ActivityIndicator, View } from 'react-native';
+import { LogBox, Platform, ActivityIndicator, View, Modal } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { registrarHandlerSessaoExpirada } from './src/services/api';
+import DespertaAlarm from './src/screens/DespertaAlarm';
+import { carregarEAgendarDespertas } from './src/services/despertaService';
 
 import Login from './src/screens/Login';
 import SupervisorHome from './src/screens/SupervisorHome';
@@ -77,8 +79,10 @@ const Stack = createNativeStackNavigator();
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [rotaInicial, setRotaInicial] = useState('Login');
-  // Referência para o navegador — necessária para navegar de dentro do listener
   const navigationRef = React.useRef<any>(null);
+
+  // Estado do alarme de desperta porteiro
+  const [despertaAtiva, setDespertaAtiva] = useState<{ id: string; nome: string; slotKey: string } | null>(null);
 
   // ─── LISTENER GLOBAL DE TOQUE NA NOTIFICAÇÃO ──────────────────────────────
   // Quando o vigilante toca na notificação "⏰ Hora da Ronda!", este listener
@@ -127,11 +131,13 @@ export default function App() {
         });
       }
       else if (data?.tipo === 'PANICO') {
-        // 👇 Joga o Supervisor direto para a tela de desarme de alarme
-        tentarNavegar('SupervisorPanico'); 
+        tentarNavegar('SupervisorPanico');
+      }
+      else if (data?.tipo === 'DESPERTA_PORTEIRO') {
+        setDespertaAtiva({ id: data.despertaId, nome: data.nome, slotKey: data.slotKey });
       }
     });
-    
+
     return () => subscription.remove();
   }, []);
 
@@ -158,6 +164,15 @@ export default function App() {
           sound: 'default',
           bypassDnd: true,
         });
+
+        await Notifications.setNotificationChannelAsync('desperta-porteiro', {
+          name: '🔔 Desperta Porteiro',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 1000, 500, 1000, 500],
+          lightColor: '#f59e0b',
+          sound: 'default',
+          bypassDnd: true,
+        });
       }
 
       try {
@@ -180,11 +195,13 @@ export default function App() {
         if (token && userString) {
           const usuario = JSON.parse(userString);
           api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-          
+
           if (usuario.perfil === 'SUPERVISOR') {
             setRotaInicial('SupervisorHome');
           } else if (usuario.perfil === 'POSTO_SERVICO') {
             setRotaInicial('VigilanteHome');
+            // Agenda despertadores ao inicializar como vigilante/porteiro
+            carregarEAgendarDespertas().catch(() => {});
           }
         }
       } catch (e) {
@@ -211,23 +228,37 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
-      <Stack.Navigator initialRouteName={rotaInicial} screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Login" component={Login} />
+    <>
+      <NavigationContainer ref={navigationRef}>
+        <Stack.Navigator initialRouteName={rotaInicial} screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="Login" component={Login} />
 
-        {/* Rotas Supervisor */}
-        <Stack.Screen name="SupervisorHome" component={SupervisorHome} />
-        <Stack.Screen name="SupervisorDashboard" component={SupervisorDashboard} />
-        <Stack.Screen name="SupervisorOcorrencias" component={SupervisorOcorrencias} />
-        <Stack.Screen name="SupervisorPanico" component={SupervisorPanico} />
-        <Stack.Screen name="ResponderChecklist" component={ResponderChecklist} />
+          {/* Rotas Supervisor */}
+          <Stack.Screen name="SupervisorHome" component={SupervisorHome} />
+          <Stack.Screen name="SupervisorDashboard" component={SupervisorDashboard} />
+          <Stack.Screen name="SupervisorOcorrencias" component={SupervisorOcorrencias} />
+          <Stack.Screen name="SupervisorPanico" component={SupervisorPanico} />
+          <Stack.Screen name="ResponderChecklist" component={ResponderChecklist} />
 
-        {/* Rotas Vigilante */}
-        <Stack.Screen name="VigilanteHome" component={VigilanteHome} />
-        <Stack.Screen name="VigilanteRondas" component={VigilanteRondas} />
-        <Stack.Screen name="VigilantePassagem" component={VigilantePassagem} />
-        <Stack.Screen name="VigilanteOcorrencia" component={VigilanteOcorrencia} />
-      </Stack.Navigator>
-    </NavigationContainer>
+          {/* Rotas Vigilante */}
+          <Stack.Screen name="VigilanteHome" component={VigilanteHome} />
+          <Stack.Screen name="VigilanteRondas" component={VigilanteRondas} />
+          <Stack.Screen name="VigilantePassagem" component={VigilantePassagem} />
+          <Stack.Screen name="VigilanteOcorrencia" component={VigilanteOcorrencia} />
+        </Stack.Navigator>
+      </NavigationContainer>
+
+      {/* Overlay de Desperta Porteiro — aparece sobre qualquer tela */}
+      {despertaAtiva && (
+        <Modal visible animationType="slide" statusBarTranslucent>
+          <DespertaAlarm
+            despertaId={despertaAtiva.id}
+            nome={despertaAtiva.nome}
+            slotKey={despertaAtiva.slotKey}
+            onConfirmado={() => setDespertaAtiva(null)}
+          />
+        </Modal>
+      )}
+    </>
   );
 }

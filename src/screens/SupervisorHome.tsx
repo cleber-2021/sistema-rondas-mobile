@@ -58,6 +58,8 @@ export default function SupervisorHome({ navigation }: any) {
   }, []);
 
   async function deslogar() {
+    try { await api.delete('/auth/push-token'); } catch {}
+    await Notifications.cancelAllScheduledNotificationsAsync();
     await AsyncStorage.clear();
     api.defaults.headers.common['Authorization'] = '';
     navigation.replace('Login');

@@ -6,6 +6,7 @@ import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { useFocusEffect } from '@react-navigation/native';
 import api from '../services/api';
+import { carregarEAgendarDespertas } from '../services/despertaService';
 
 interface OcorrenciaPendente {
   id: string;
@@ -32,6 +33,8 @@ export default function VigilanteHome({ navigation }: any) {
       if (userString) setNomePosto(JSON.parse(userString).nome);
     }
     carregarUser();
+    // Agenda/reagenda despertadores ao abrir a tela home
+    carregarEAgendarDespertas().catch(() => {});
   }, []);
 
   // Verifica inspeções perdidas sem justificativa toda vez que a tela recebe foco
@@ -80,6 +83,7 @@ export default function VigilanteHome({ navigation }: any) {
   }
 
   async function deslogar() {
+    try { await api.delete('/auth/push-token'); } catch {}
     await Notifications.cancelAllScheduledNotificationsAsync();
     await AsyncStorage.clear();
     api.defaults.headers.common['Authorization'] = '';
