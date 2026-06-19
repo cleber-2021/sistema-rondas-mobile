@@ -601,7 +601,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
                     <Text style={{ fontWeight: 'bold', fontSize: 16 }}>{rota.nome}</Text>
                     <Text style={{ color: '#64748b' }}>{rota.rota_checkpoints?.length || 0} pontos a visitar</Text>
                   </View>
-                  <TouchableOpacity style={[styles.btnIniciar, { backgroundColor: '#0284c7' }]} onPress={() => iniciarRonda(rota)}>
+                  <TouchableOpacity style={[styles.btnIniciar, { backgroundColor: '#1a1a1a' }]} onPress={() => iniciarRonda(rota)}>
                     <Text style={{ color: '#fff', fontWeight: 'bold' }}>Iniciar</Text>
                   </TouchableOpacity>
                 </View>
@@ -816,8 +816,8 @@ const styles = StyleSheet.create({
   btnToggleChk: { flex: 1, padding: 12, borderRadius: 6, borderWidth: 1, borderColor: '#cbd5e1', alignItems: 'center', justifyContent: 'center' },
   inputAreaChk: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, paddingHorizontal: 15, fontSize: 14, color: '#1e293b' },
   btnCameraChk: { padding: 15, borderRadius: 8, alignItems: 'center' },
-  header: { padding: 25, paddingTop: 60, backgroundColor: '#1e293b', alignItems: 'center' },
-  title: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
+  header: { padding: 25, paddingTop: 60, backgroundColor: '#b0b0b0', alignItems: 'center' },
+  title: { color: '#1a1a1a', fontSize: 22, fontWeight: 'bold' },
   timer: { fontSize: 50, fontWeight: 'bold', color: '#dc2626', marginVertical: 20 },
   pontoNome: { fontSize: 20, color: '#334155', marginBottom: 20 },
   rotaCard: { backgroundColor: '#fff', padding: 20, borderRadius: 12, marginBottom: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

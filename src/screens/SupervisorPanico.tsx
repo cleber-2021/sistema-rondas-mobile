@@ -80,7 +80,7 @@ export default function SupervisorPanico({ navigation }: any) {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 15 }}>
-          <Ionicons name="arrow-back" size={28} color="#fff" />
+          <Ionicons name="arrow-back" size={28} color="#1a1a1a" />
         </TouchableOpacity>
         <View>
           <Text style={styles.title}>CRISES ATIVAS</Text>
@@ -158,10 +158,10 @@ export default function SupervisorPanico({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1e293b' }, // Fundo slate escuro profissional
-  header: { flexDirection: 'row', alignItems: 'center', padding: 25, paddingTop: 60, backgroundColor: '#0f172a' },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#fff' },
-  subtitle: { fontSize: 14, color: '#94a3b8' },
+  container: { flex: 1, backgroundColor: '#f8fafc' },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 25, paddingTop: 60, backgroundColor: '#b0b0b0' },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#1a1a1a' },
+  subtitle: { fontSize: 14, color: '#2d2d2d' },
   scroll: { padding: 20 },
   cardCritico: { backgroundColor: '#fff', borderRadius: 12, padding: 20, marginBottom: 20, borderWidth: 3, elevation: 6 },
   topoCard: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, paddingBottom: 15, marginBottom: 15 },
@@ -173,6 +173,6 @@ const styles = StyleSheet.create({
   btnAcao: { padding: 16, borderRadius: 8, alignItems: 'center', elevation: 2 },
   btnAcaoText: { color: '#fff', fontWeight: 'bold', fontSize: 14, textAlign: 'center' },
   areaLimpa: { alignItems: 'center', marginTop: 120, padding: 20 },
-  textoLimpo: { color: '#fff', fontSize: 22, fontWeight: 'bold', marginTop: 15 },
+  textoLimpo: { color: '#1a1a1a', fontSize: 22, fontWeight: 'bold', marginTop: 15 },
   subTextoLimpo: { color: '#94a3b8', fontSize: 14, textAlign: 'center', marginTop: 5 }
 });

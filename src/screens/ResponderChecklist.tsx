@@ -140,8 +140,8 @@ export default function ResponderChecklist({ route, navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f1f5f9' },
-  header: { backgroundColor: '#1e293b', padding: 20, paddingTop: 50, borderBottomLeftRadius: 15, borderBottomRightRadius: 15 },
-  headerTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
+  header: { backgroundColor: '#b0b0b0', padding: 20, paddingTop: 50, borderBottomLeftRadius: 15, borderBottomRightRadius: 15 },
+  headerTitle: { color: '#1a1a1a', fontSize: 20, fontWeight: 'bold' },
   headerDesc: { color: '#94a3b8', fontSize: 14, marginTop: 5 },
   scroll: { flex: 1, padding: 15 },
   card: { backgroundColor: '#fff', padding: 15, borderRadius: 10, marginBottom: 15, elevation: 1 },

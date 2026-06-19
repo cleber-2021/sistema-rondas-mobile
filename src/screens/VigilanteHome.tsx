@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal, TextInput, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal, TextInput, ScrollView, ActivityIndicator, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -174,8 +174,17 @@ export default function VigilanteHome({ navigation }: any) {
 
       {/* ── TELA PRINCIPAL ── */}
       <View style={styles.header}>
-        <Text style={styles.title}>{nomePosto}</Text>
-        <Text style={styles.subtitle}>Operação em Andamento</Text>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.title}>{nomePosto}</Text>
+            <Text style={styles.subtitle}>Operação em Andamento</Text>
+          </View>
+          <Image
+            source={require('../../assets/logo_empresa.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+        </View>
       </View>
 
       <View style={styles.menuContainer}>
@@ -231,9 +240,11 @@ export default function VigilanteHome({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
-  header: { padding: 25, paddingTop: 70, backgroundColor: '#1e293b', borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
-  title: { fontSize: 26, fontWeight: 'bold', color: '#fff' },
-  subtitle: { fontSize: 16, color: '#cbd5e1', marginTop: 5 },
+  header: { padding: 25, paddingTop: 60, backgroundColor: '#b0b0b0', borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerLogo: { width: 120, height: 48 },
+  title: { fontSize: 26, fontWeight: 'bold', color: '#1a1a1a' },
+  subtitle: { fontSize: 16, color: '#2d2d2d', marginTop: 5 },
   menuContainer: { flex: 1, padding: 20, marginTop: 10 },
   cardMenu: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 20, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#e2e8f0', elevation: 2 },
   iconBox: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },
@@ -257,6 +268,6 @@ const styles = StyleSheet.create({
   labelJustDesc: { fontSize: 13, color: '#64748b', marginBottom: 12, lineHeight: 18 },
   inputJust: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, padding: 14, fontSize: 15, color: '#1e293b', minHeight: 120 },
   modalFooter: { padding: 20, paddingBottom: 40, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e2e8f0' },
-  btnConfirmar: { backgroundColor: '#0284c7', padding: 16, borderRadius: 10, alignItems: 'center' },
+  btnConfirmar: { backgroundColor: '#1a1a1a', padding: 16, borderRadius: 10, alignItems: 'center' },
   btnConfirmarText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
 });
