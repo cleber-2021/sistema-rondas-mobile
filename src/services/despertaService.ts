@@ -20,11 +20,11 @@ export function gerarSlotKey(despertaId: string, hora: string): string {
 }
 
 // Verifica se hoje é dia ativo para o despertador
+// dias_semana é armazenado como "0,1,2,3,4,5,6" onde cada número representa o getDay() do JS
 function isDiaAtivo(diasSemana: string | null): boolean {
   if (!diasSemana) return true;
-  const dias = diasSemana.split(',');
-  const hoje = new Date().getDay(); // 0=Dom, 6=Sáb
-  return dias[hoje] === '1';
+  const hoje = new Date().getDay(); // 0=Dom, 1=Seg, ..., 6=Sáb
+  return diasSemana.split(',').map(Number).includes(hoje);
 }
 
 // Gera todos os horários de disparo entre hora_inicio e hora_fim com intervalo
