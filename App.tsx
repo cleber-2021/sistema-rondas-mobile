@@ -25,13 +25,15 @@ import SupervisorPanico from './src/screens/SupervisorPanico';
 LogBox.ignoreLogs(['expo-notifications: Android Push notifications']);
 
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
+  handleNotification: async (notification) => {
+    // Não exibe notificações de ronda se não houver sessão ativa
+    const token = await AsyncStorage.getItem('@RondasApp:token');
+    const tipo = notification.request.content.data?.tipo as string | undefined;
+    if (!token && (tipo === 'RONDA_LIBERADA' || tipo === 'DESPERTA_PORTEIRO')) {
+      return { shouldShowAlert: false, shouldShowBanner: false, shouldShowList: false, shouldPlaySound: false, shouldSetBadge: false };
+    }
+    return { shouldShowAlert: true, shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: true };
+  },
 });
 
 const BACKGROUND_PANICO_TASK = 'background-panico-check';
