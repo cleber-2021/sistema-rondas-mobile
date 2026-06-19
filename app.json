@@ -62,10 +62,8 @@
       "expo-font"
     ],
     "extra": {
-      "eas": {
-        "projectId": "351e294b-c5a1-472b-9831-9b4584e2e942"
-      }
+      "eas": {}
     },
-    "owner": "cleber.rocha"
+    "owner": "cleber.2510"
   }
 }
