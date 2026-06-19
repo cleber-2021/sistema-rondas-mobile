@@ -8,7 +8,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "bump": "node scripts/bump-version.js",
-    "build:apk": "npx eas-cli build -p android --profile preview"
+    "build:apk": "npm install -g eas-cli@latest --silent && EXPO_TOKEN=alQOu6Cxr6zYlbbmyTeDybblGWRlV7me14u5a6Zy eas build -p android --profile preview"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
