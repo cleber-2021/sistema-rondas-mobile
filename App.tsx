@@ -1,4 +1,4 @@
-// App.tsx
+﻿// App.tsx
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -24,16 +24,15 @@ import SupervisorPanico from './src/screens/SupervisorPanico';
 
 LogBox.ignoreLogs(['expo-notifications: Android Push notifications']);
 
+// Sempre exibe todas as notificacoes quando o app esta em foreground
 Notifications.setNotificationHandler({
-  handleNotification: async (notification) => {
-    // Não exibe notificações de ronda se não houver sessão ativa
-    const token = await AsyncStorage.getItem('@RondasApp:token');
-    const tipo = notification.request.content.data?.tipo as string | undefined;
-    if (!token && (tipo === 'RONDA_LIBERADA' || tipo === 'DESPERTA_PORTEIRO')) {
-      return { shouldShowAlert: false, shouldShowBanner: false, shouldShowList: false, shouldPlaySound: false, shouldSetBadge: false };
-    }
-    return { shouldShowAlert: true, shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: true };
-  },
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
 });
 
 const BACKGROUND_PANICO_TASK = 'background-panico-check';
@@ -59,7 +58,7 @@ TaskManager.defineTask(BACKGROUND_PANICO_TASK, async () => {
     if (res.data?.existe_panico) {
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: '🆘 ALERTA CRÍTICO DE PÂNICO!',
+          title: 'ALERTA CRITICO DE PANICO!',
           body: `Operador: ${res.data.nome_vigilante || 'Em Campo'}\nLocal: ${res.data.nome_local || 'Desconhecido'}`,
           sound: true,
           priority: Notifications.AndroidNotificationPriority.MAX,
@@ -83,17 +82,8 @@ export default function App() {
   const [rotaInicial, setRotaInicial] = useState('Login');
   const navigationRef = React.useRef<any>(null);
 
-  // Estado do alarme de desperta porteiro
   const [despertaAtiva, setDespertaAtiva] = useState<{ id: string; nome: string; slotKey: string } | null>(null);
 
-  // ─── LISTENER GLOBAL DE TOQUE NA NOTIFICAÇÃO ──────────────────────────────
-  // Quando o vigilante toca na notificação "⏰ Hora da Ronda!", este listener
-  // lê o campo `data.rota_id` que foi embutido na notificação e navega
-  // diretamente para VigilanteRondas passando o ID da rota a ser iniciada.
-  // ─── LISTENER GLOBAL DE TOQUE NA NOTIFICAÇÃO ──────────────────────────────
-  // ─── HANDLER GLOBAL DE SESSÃO EXPIRADA ────────────────────────────────────
-  // Quando o interceptor de resposta da API detecta 401/403 (token expirado),
-  // ele chama esta função, que reseta a navegação de volta para o Login.
   useEffect(() => {
     registrarHandlerSessaoExpirada(() => {
       const irParaLogin = () => {
@@ -110,9 +100,7 @@ export default function App() {
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data as any;
-      
-      // 1. Criamos a função FORA dos IFs para que todos possam usá-la, 
-      // e preparamos ela para receber o nome da rota e os parâmetros dinamicamente.
+
       const tentarNavegar = (rota: string, params?: any) => {
         if (navigationRef.current?.isReady()) {
           navigationRef.current.navigate(rota, params);
@@ -121,9 +109,7 @@ export default function App() {
         }
       };
 
-      // 2. Agora fazemos as checagens chamando a função recém-criada
       if (data?.tipo === 'RONDA_LIBERADA' && data?.rota_id) {
-        // Só navega para rondas se for vigilante — supervisor não recebe estas notificações
         AsyncStorage.getItem('@RondasApp:user').then(userStr => {
           if (!userStr) return;
           const u = JSON.parse(userStr);
@@ -147,19 +133,19 @@ export default function App() {
     async function configurar() {
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== 'granted') {
-        console.warn('Permissão de notificações negada.');
+        console.warn('Permissao de notificacoes negada.');
       }
 
       if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('rondas-default', {
-          name: 'Notificações de Rondas',
+          name: 'Notificacoes de Rondas',
           importance: Notifications.AndroidImportance.HIGH,
           vibrationPattern: [0, 250, 250, 250],
           lightColor: '#2563eb',
         });
 
         await Notifications.setNotificationChannelAsync('rondas-panico', {
-          name: '🆘 Alertas de Pânico',
+          name: 'Alertas de Panico',
           importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 500, 200, 500, 200, 500],
           lightColor: '#dc2626',
@@ -168,7 +154,7 @@ export default function App() {
         });
 
         await Notifications.setNotificationChannelAsync('desperta-porteiro', {
-          name: '🔔 Desperta Porteiro',
+          name: 'Desperta Porteiro',
           importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 1000, 500, 1000, 500],
           lightColor: '#f59e0b',
@@ -183,9 +169,8 @@ export default function App() {
           stopOnTerminate: false,
           startOnBoot: true,
         });
-        console.log('✅ Background fetch registrado.');
       } catch (e) {
-        console.warn('Background fetch não pôde ser registrado:', e);
+        console.warn('Background fetch nao pode ser registrado:', e);
       }
     }
 
@@ -202,12 +187,11 @@ export default function App() {
             setRotaInicial('SupervisorHome');
           } else if (usuario.perfil === 'POSTO_SERVICO') {
             setRotaInicial('VigilanteHome');
-            // Agenda despertadores ao inicializar como vigilante/porteiro
             carregarEAgendarDespertas().catch(() => {});
           }
         }
       } catch (e) {
-        console.log("Erro na reidratação:", e);
+        console.log("Erro na reidratacao:", e);
       } finally {
         setLoading(false);
       }
@@ -235,14 +219,12 @@ export default function App() {
         <Stack.Navigator initialRouteName={rotaInicial} screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Login" component={Login} />
 
-          {/* Rotas Supervisor */}
           <Stack.Screen name="SupervisorHome" component={SupervisorHome} />
           <Stack.Screen name="SupervisorDashboard" component={SupervisorDashboard} />
           <Stack.Screen name="SupervisorOcorrencias" component={SupervisorOcorrencias} />
           <Stack.Screen name="SupervisorPanico" component={SupervisorPanico} />
           <Stack.Screen name="ResponderChecklist" component={ResponderChecklist} />
 
-          {/* Rotas Vigilante */}
           <Stack.Screen name="VigilanteHome" component={VigilanteHome} />
           <Stack.Screen name="VigilanteRondas" component={VigilanteRondas} />
           <Stack.Screen name="VigilantePassagem" component={VigilantePassagem} />
@@ -250,7 +232,6 @@ export default function App() {
         </Stack.Navigator>
       </NavigationContainer>
 
-      {/* Overlay de Desperta Porteiro — aparece sobre qualquer tela */}
       {despertaAtiva && (
         <Modal visible animationType="slide" statusBarTranslucent>
           <DespertaAlarm

@@ -1,4 +1,4 @@
-import * as Notifications from 'expo-notifications';
+﻿import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from './api';
 
@@ -12,22 +12,20 @@ export interface DespertaConfig {
   ativo: boolean;
 }
 
-// Gera uma chave única para cada slot de confirmação: "despertaId_YYYY-MM-DD_HHmm"
+// Gera uma chave unica para cada slot: "despertaId_YYYY-MM-DD_HHmm"
 export function gerarSlotKey(despertaId: string, hora: string): string {
   const hoje = new Date();
   const dataStr = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
   return `${despertaId}_${dataStr}_${hora.replace(':', '')}`;
 }
 
-// Verifica se hoje é dia ativo para o despertador
-// dias_semana é armazenado como "0,1,2,3,4,5,6" onde cada número representa o getDay() do JS
+// dias_semana armazenado como "0,1,2,3,4,5,6" (getDay() do JS)
 function isDiaAtivo(diasSemana: string | null): boolean {
   if (!diasSemana) return true;
-  const hoje = new Date().getDay(); // 0=Dom, 1=Seg, ..., 6=Sáb
+  const hoje = new Date().getDay();
   return diasSemana.split(',').map(Number).includes(hoje);
 }
 
-// Gera todos os horários de disparo entre hora_inicio e hora_fim com intervalo
 function gerarSlots(horaInicio: string, horaFim: string, intervaloMin: number): string[] {
   const [hI, mI] = horaInicio.split(':').map(Number);
   const [hF, mF] = horaFim.split(':').map(Number);
@@ -46,9 +44,8 @@ function gerarSlots(horaInicio: string, horaFim: string, intervaloMin: number): 
   return slots;
 }
 
-// Agenda as notificações de desperta para o dia atual
 export async function agendarDespertas(despertaList: DespertaConfig[]) {
-  // Remove notificações de desperta anteriores
+  // Remove notificacoes de desperta anteriores
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
   for (const n of scheduled) {
     if (n.content.data?.tipo === 'DESPERTA_PORTEIRO') {
@@ -69,10 +66,8 @@ export async function agendarDespertas(despertaList: DespertaConfig[]) {
       const [h, m] = slot.split(':').map(Number);
       const slotMin = h * 60 + m;
 
-      // Só agenda slots futuros
       if (slotMin <= horaAtualMin) continue;
 
-      // Verifica se já confirmou este slot
       const slotKey = gerarSlotKey(d.id, slot);
       const confirmado = await AsyncStorage.getItem(`@desperta_confirmado:${d.id}:${slotKey}`);
       if (confirmado) continue;
@@ -82,11 +77,13 @@ export async function agendarDespertas(despertaList: DespertaConfig[]) {
 
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: '🔔 DESPERTA PORTEIRO',
-          body: `${d.nome} — Confirme sua presença!`,
+          title: 'DESPERTA PORTEIRO',
+          body: `${d.nome} - Confirme sua presenca!`,
           data: { tipo: 'DESPERTA_PORTEIRO', despertaId: d.id, nome: d.nome, slotKey },
           sound: 'default',
           priority: Notifications.AndroidNotificationPriority.MAX,
+          // @ts-ignore
+          channelId: 'desperta-porteiro',
         },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: disparo },
       });
@@ -94,7 +91,6 @@ export async function agendarDespertas(despertaList: DespertaConfig[]) {
   }
 }
 
-// Carrega configurações do servidor e agenda
 export async function carregarEAgendarDespertas() {
   try {
     const resp = await api.get('/desperta/mobile');

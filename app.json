@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "SSI Inspeção",
+    "name": "SSI Inspecao",
     "slug": "sulclean-rondas",
-    "version": "1.0.16",
+    "version": "1.0.17",
     "orientation": "portrait",
     "icon": "./assets/logo_fundo_preto.png",
     "userInterfaceStyle": "light",
@@ -46,15 +46,15 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Permita rastrear a sua localização.",
-          "locationAlwaysPermission": "Permita rastrear a localização.",
+          "locationAlwaysAndWhenInUsePermission": "Permita rastrear a sua localizacao.",
+          "locationAlwaysPermission": "Permita rastrear a localizacao.",
           "isAndroidBackgroundLocationEnabled": true
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Permita o acesso à câmara."
+          "cameraPermission": "Permita o acesso a camera."
         }
       ],
       "expo-notifications",
@@ -62,7 +62,9 @@
       "expo-font"
     ],
     "extra": {
-      "eas": {}
+      "eas": {
+        "projectId": "4f2624c7-5be3-4c31-b4e3-338facfa89ce"
+      }
     },
     "owner": "cleber.2510"
   }
