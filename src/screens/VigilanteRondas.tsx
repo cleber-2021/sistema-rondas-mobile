@@ -112,6 +112,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
 
   // Ref para deduplicação no foreground (mais rápido que AsyncStorage para o path síncrono)
   const jaRegistrando = useRef(false);
+  const jaFalhou = useRef(false);
 
   const [modalScanner, setModalScanner] = useState(false);
   const [permissaoCamera, pedirPermissaoCamera] = useCameraPermissions();
@@ -169,7 +170,10 @@ export default function VigilanteRondas({ navigation, route }: any) {
       if (fim) {
         const restante = Math.floor((parseInt(fim) - Date.now()) / 1000);
         if (restante <= 0) {
-          registrarFalhaPorTempo();
+          if (!jaFalhou.current) {
+            jaFalhou.current = true;
+            registrarFalhaPorTempo();
+          }
         } else {
           setTempoRestante(restante);
         }
@@ -284,7 +288,13 @@ export default function VigilanteRondas({ navigation, route }: any) {
       const u = JSON.parse(userStr);
       if (u.perfil !== 'POSTO_SERVICO') return;
     }
-    await Notifications.cancelAllScheduledNotificationsAsync();
+    // Cancela apenas notificações de ronda — preserva as do desperta porteiro
+    const agendadas = await Notifications.getAllScheduledNotificationsAsync();
+    for (const n of agendadas) {
+      if (n.content.data?.tipo === 'RONDA_LIBERADA') {
+        await Notifications.cancelScheduledNotificationAsync(n.identifier);
+      }
+    }
     for (const rota of rotas) {
       if (!rota.intervalo_minutos) continue;
       const { proximoSlotTs } = calcularSlotAtual(rota.hora_inicio ?? null, rota.intervalo_minutos);
@@ -362,8 +372,9 @@ export default function VigilanteRondas({ navigation, route }: any) {
         longitude: lng,
       });
       avancaParaProximoPontoOuFinaliza();
-    } catch (e) {
-      Alert.alert('Falha', 'Erro ao registrar ponto. O GPS vai tentar novamente.');
+    } catch (e: any) {
+      const msg = e?.response?.data?.error || 'Erro ao registrar ponto. Tente novamente.';
+      Alert.alert('Falha', msg);
       jaRegistrando.current = false;
       await AsyncStorage.setItem('@Ronda:jaRegistrando', 'false');
     }
@@ -392,6 +403,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
       const r = { ...ronda, pontoAtual: prox };
       const novoFim = Date.now() + ((prox.tempo_limite_min || 5) * 60000);
 
+      jaFalhou.current = false;
       setPontoAtual(prox);
       setRondaEmAndamento(r);
 
@@ -409,8 +421,8 @@ export default function VigilanteRondas({ navigation, route }: any) {
     await AsyncStorage.multiRemove(['@Ronda:emAndamento', '@Ronda:fim', '@Ronda:pontoAtual', '@Ronda:pontoValidado', '@Ronda:jaRegistrando']);
     setRondaEmAndamento(null);
     setPontoAtual(null);
-    Alert.alert('✅ Sucesso', 'Inspeção finalizada!');
-    carregarRotas();
+    // Volta para VigilanteHome para que o useFocusEffect dispare verificarPendentes
+    navigation.navigate('VigilanteHome');
   }
 
   async function abrirChecklistInspecao(checklistId: string) {
@@ -475,9 +487,13 @@ export default function VigilanteRondas({ navigation, route }: any) {
   }
 
   async function registrarFalhaPorTempo() {
+    // Lê do AsyncStorage para evitar estado stale do closure do setInterval
+    const rondaSalva = await AsyncStorage.getItem('@Ronda:emAndamento');
+    if (!rondaSalva) return;
+    const ronda = JSON.parse(rondaSalva);
     await api.post('/rondas/falhar-ponto', {
-      ronda_id: rondaEmAndamento.id,
-      checkpoint_id: pontoAtual.checkpoint_id,
+      ronda_id: ronda.id,
+      checkpoint_id: ronda.pontoAtual.checkpoint_id,
     });
     avancaParaProximoPontoOuFinaliza();
   }

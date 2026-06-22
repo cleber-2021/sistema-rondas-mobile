@@ -97,33 +97,42 @@ export default function App() {
     });
   }, []);
 
-  useEffect(() => {
-    const subscription = Notifications.addNotificationResponseReceivedListener(response => {
-      const data = response.notification.request.content.data as any;
+  // Processa a resposta de uma notificação (toque do usuário)
+  function processarRespostaNotificacao(response: Notifications.NotificationResponse) {
+    const data = response.notification.request.content.data as any;
 
-      const tentarNavegar = (rota: string, params?: any) => {
-        if (navigationRef.current?.isReady()) {
-          navigationRef.current.navigate(rota, params);
-        } else {
-          setTimeout(() => tentarNavegar(rota, params), 200);
+    const tentarNavegar = (rota: string, params?: any) => {
+      if (navigationRef.current?.isReady()) {
+        navigationRef.current.navigate(rota, params);
+      } else {
+        setTimeout(() => tentarNavegar(rota, params), 200);
+      }
+    };
+
+    if (data?.tipo === 'RONDA_LIBERADA' && data?.rota_id) {
+      AsyncStorage.getItem('@RondasApp:user').then(userStr => {
+        if (!userStr) return;
+        const u = JSON.parse(userStr);
+        if (u.perfil === 'POSTO_SERVICO') {
+          tentarNavegar('VigilanteRondas', { rota_id_auto: data.rota_id });
         }
-      };
+      });
+    }
+    else if (data?.tipo === 'PANICO') {
+      tentarNavegar('SupervisorPanico');
+    }
+    else if (data?.tipo === 'DESPERTA_PORTEIRO') {
+      setDespertaAtiva({ id: data.despertaId, nome: data.nome, slotKey: data.slotKey });
+    }
+  }
 
-      if (data?.tipo === 'RONDA_LIBERADA' && data?.rota_id) {
-        AsyncStorage.getItem('@RondasApp:user').then(userStr => {
-          if (!userStr) return;
-          const u = JSON.parse(userStr);
-          if (u.perfil === 'POSTO_SERVICO') {
-            tentarNavegar('VigilanteRondas', { rota_id_auto: data.rota_id });
-          }
-        });
-      }
-      else if (data?.tipo === 'PANICO') {
-        tentarNavegar('SupervisorPanico');
-      }
-      else if (data?.tipo === 'DESPERTA_PORTEIRO') {
-        setDespertaAtiva({ id: data.despertaId, nome: data.nome, slotKey: data.slotKey });
-      }
+  useEffect(() => {
+    // Listener para notificações tocadas enquanto o app já está aberto ou em background
+    const subscription = Notifications.addNotificationResponseReceivedListener(processarRespostaNotificacao);
+
+    // Verifica se o app foi aberto pelo toque numa notificação (app estava fechado)
+    Notifications.getLastNotificationResponseAsync().then(response => {
+      if (response) processarRespostaNotificacao(response);
     });
 
     return () => subscription.remove();
