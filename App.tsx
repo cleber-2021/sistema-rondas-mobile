@@ -162,13 +162,17 @@ export default function App() {
           bypassDnd: true,
         });
 
-        await Notifications.setNotificationChannelAsync('desperta-porteiro', {
-          name: 'Desperta Porteiro',
+        // Canal v3: ID novo porque canais são imutáveis após criados no Android.
+        // Som de sirene alto + vibração longa que dispara assim que a notificação chega.
+        await Notifications.setNotificationChannelAsync('desperta-porteiro-sirene', {
+          name: 'Desperta Porteiro (Sirene)',
           importance: Notifications.AndroidImportance.MAX,
-          vibrationPattern: [0, 1000, 500, 1000, 500],
+          vibrationPattern: [0, 1000, 500, 1000, 500, 1000, 500, 1000, 500, 1000],
           lightColor: '#f59e0b',
-          sound: 'default',
+          sound: 'sirene.mp3',
           bypassDnd: true,
+          enableVibrate: true,
+          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
         });
       }
 

@@ -77,13 +77,16 @@ export async function agendarDespertas(despertaList: DespertaConfig[]) {
 
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: 'DESPERTA PORTEIRO',
-          body: `${d.nome} - Confirme sua presenca!`,
+          title: '🔔 DESPERTA PORTEIRO',
+          body: `${d.nome} - Confirme sua presenca AGORA!`,
           data: { tipo: 'DESPERTA_PORTEIRO', despertaId: d.id, nome: d.nome, slotKey },
-          sound: 'default',
+          sound: 'sirene.mp3',
           priority: Notifications.AndroidNotificationPriority.MAX,
+          vibrate: [0, 1000, 500, 1000, 500, 1000, 500, 1000],
           // @ts-ignore
-          channelId: 'desperta-porteiro',
+          channelId: 'desperta-porteiro-sirene',
+          // @ts-ignore
+          sticky: true,
         },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: disparo },
       });

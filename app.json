@@ -2,7 +2,7 @@
   "expo": {
     "name": "SSI Inspecao",
     "slug": "sulclean-rondas",
-    "version": "1.0.18",
+    "version": "1.0.20",
     "orientation": "portrait",
     "icon": "./assets/logo_fundo_preto.png",
     "userInterfaceStyle": "light",
@@ -57,7 +57,14 @@
           "cameraPermission": "Permita o acesso a camera."
         }
       ],
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "sounds": [
+            "./assets/sirene.mp3"
+          ]
+        }
+      ],
       "expo-task-manager",
       "expo-font"
     ],

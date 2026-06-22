@@ -1,7 +1,7 @@
-﻿// screens/Login.tsx
-// ALTERAÃ‡Ã•ES: apÃ³s login bem-sucedido, obtÃ©m o Expo Push Token do dispositivo
+// screens/Login.tsx
+// ALTERAÇÕES: após login bem-sucedido, obtém o Expo Push Token do dispositivo
 // e envia para o servidor via POST /auth/push-token.
-// Sem isso o servidor nÃ£o sabe para qual dispositivo enviar as notificaÃ§Ãµes.
+// Sem isso o servidor não sabe para qual dispositivo enviar as notificações.
 
 import React, { useState } from 'react';
 import {
@@ -16,13 +16,13 @@ import { Platform } from 'react-native';
 import api from '../services/api';
 
 /**
- * ObtÃ©m o Expo Push Token do dispositivo fÃ­sico.
- * Retorna null em emuladores (nÃ£o suportam push real).
+ * Obtém o Expo Push Token do dispositivo físico.
+ * Retorna null em emuladores (não suportam push real).
  */
 async function obterExpoPushToken(): Promise<string | null> {
-  // Push sÃ³ funciona em dispositivos fÃ­sicos
+  // Push só funciona em dispositivos físicos
   if (!Device.isDevice) {
-    console.warn('Push notifications nÃ£o funcionam em emuladores.');
+    console.warn('Push notifications não funcionam em emuladores.');
     return null;
   }
 
@@ -35,13 +35,12 @@ async function obterExpoPushToken(): Promise<string | null> {
   }
 
   if (statusFinal !== 'granted') {
-    console.warn('PermissÃ£o de notificaÃ§Ãµes negada pelo usuÃ¡rio.');
+    console.warn('Permissão de notificações negada pelo usuário.');
     return null;
   }
 
   try {
-    // projectId vem do app.json â†’ expo.extra.eas.projectId
-    // Se nÃ£o estiver usando EAS, pode passar projectId manualmente abaixo
+    // projectId vem do app.json → expo.extra.eas.projectId
     const tokenData = await Notifications.getExpoPushTokenAsync({ projectId: '4f2624c7-5be3-4c31-b4e3-338facfa89ce' });
     return tokenData.data;
   } catch (e) {
@@ -58,7 +57,7 @@ export default function Login({ navigation }: any) {
 
   async function handleLogin() {
     if (!usuarioLocal || !senha) {
-      return Alert.alert('Erro', 'Preencha o UsuÃ¡rio e Senha!');
+      return Alert.alert('Erro', 'Preencha o Usuário e Senha!');
     }
     setLoading(true);
 
@@ -68,42 +67,42 @@ export default function Login({ navigation }: any) {
       const { token, usuario } = res.data;
 
       if (!token || !usuario) {
-        throw new Error('Dados de usuÃ¡rio nÃ£o retornados corretamente pelo servidor.');
+        throw new Error('Dados de usuário não retornados corretamente pelo servidor.');
       }
 
       // 1b. Restringe o acesso ao app: apenas vigilante (POSTO_SERVICO) e
-      // supervisor de campo (SUPERVISOR) podem usar o mobile. Perfis de gestÃ£o
+      // supervisor de campo (SUPERVISOR) podem usar o mobile. Perfis de gestão
       // e monitoramento usam apenas o painel web.
       const perfisMobile = ['SUPERVISOR', 'POSTO_SERVICO'];
       if (!perfisMobile.includes(usuario.perfil)) {
         setLoading(false);
         return Alert.alert(
           'Acesso restrito',
-          'Este aplicativo Ã© exclusivo para operadores e supervisores de campo. Acesse o painel web com este perfil.'
+          'Este aplicativo é exclusivo para operadores e supervisores de campo. Acesse o painel web com este perfil.'
         );
       }
 
-      // 2. Persiste token e dados do usuÃ¡rio
+      // 2. Persiste token e dados do usuário
       await AsyncStorage.setItem('@RondasApp:token', token);
       await AsyncStorage.setItem('@RondasApp:user', JSON.stringify(usuario));
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
-      // 3. Registra o push token no servidor (nÃ£o bloqueia o login se falhar)
+      // 3. Registra o push token no servidor (não bloqueia o login se falhar)
       try {
         const pushToken = await obterExpoPushToken();
         if (pushToken) {
           await api.post('/auth/push-token', { expo_push_token: pushToken });
-          console.log('ðŸ“² Push token registrado:', pushToken);
+          console.log('📲 Push token registrado:', pushToken);
         }
       } catch (pushError) {
-        // Erro de push nÃ£o impede o login
-        console.warn('NÃ£o foi possÃ­vel registrar o push token:', pushError);
+        // Erro de push não impede o login
+        console.warn('Não foi possível registrar o push token:', pushError);
       }
 
       // 4. Redireciona por perfil
       redirecionarPorPerfil(usuario.perfil);
     } catch (e: any) {
-      Alert.alert('Erro de ConexÃ£o', 'Verifique usuÃ¡rio e senha ou se o servidor estÃ¡ ativo.');
+      Alert.alert('Erro de Conexão', 'Verifique usuário e senha ou se o servidor está ativo.');
       console.log('Erro completo:', e.response?.data || e.message);
     } finally {
       setLoading(false);
@@ -125,7 +124,7 @@ export default function Login({ navigation }: any) {
 
       <TextInput
         style={styles.input}
-        placeholder="UsuÃ¡rio"
+        placeholder="Usuário"
         placeholderTextColor="#94a3b8"
         value={usuarioLocal}
         onChangeText={setUsuarioLocal}
