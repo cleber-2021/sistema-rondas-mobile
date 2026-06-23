@@ -263,22 +263,68 @@ export default function VigilanteRondas({ navigation, route }: any) {
     return () => { if (watchSubscription) watchSubscription.remove(); };
   }, [rondaEmAndamento, pontoAtual]);
 
-  // Calcula o slot fixo atual: hora_inicio + N × intervalo (independe da última execução)
-  function calcularSlotAtual(horaInicio: string | null, intervaloMin: number): { slotTs: number; proximoSlotTs: number } {
+  // Calcula o slot atual e o próximo, respeitando a janela [hora_inicio, hora_fim].
+  // Após hora_fim, o próximo slot rola para a abertura (hora_inicio) do dia seguinte.
+  function calcularSlotAtual(horaInicio: string | null, horaFim: string | null, intervaloMin: number):
+    { slotTs: number; proximoSlotTs: number; inicioTs: number; fimTs: number } {
     const agora = Date.now();
     const intervaloMs = intervaloMin * 60_000;
-    const base = new Date();
-    if (horaInicio) {
-      const [h, m] = horaInicio.split(':').map(Number);
-      base.setHours(h, m, 0, 0);
+
+    // Janela de operação de hoje
+    const inicio = new Date();
+    let hi = 0, mi = 0;
+    if (horaInicio) { const p = horaInicio.split(':').map(Number); hi = p[0]; mi = p[1]; }
+    inicio.setHours(hi, mi, 0, 0);
+
+    const fim = new Date(inicio);
+    if (horaFim) {
+      const [hf, mf] = horaFim.split(':').map(Number);
+      fim.setHours(hf, mf, 0, 0);
+      // Turno que vira o dia (ex: 19h às 07h) → fim é no dia seguinte
+      if (fim.getTime() <= inicio.getTime()) fim.setDate(fim.getDate() + 1);
     } else {
-      base.setHours(0, 0, 0, 0);
+      fim.setDate(fim.getDate() + 1); // sem fim definido = 24h
     }
-    const baseTs = base.getTime();
-    if (agora < baseTs) return { slotTs: baseTs, proximoSlotTs: baseTs + intervaloMs };
-    const slots = Math.floor((agora - baseTs) / intervaloMs);
-    const slotTs = baseTs + slots * intervaloMs;
-    return { slotTs, proximoSlotTs: slotTs + intervaloMs };
+
+    // Se já passou do fim da janela de hoje, rola para a janela de amanhã
+    if (agora >= fim.getTime()) {
+      inicio.setDate(inicio.getDate() + 1);
+      fim.setDate(fim.getDate() + 1);
+    }
+
+    const inicioTs = inicio.getTime();
+    const fimTs = fim.getTime();
+
+    let slotTs: number, proximoSlotTs: number;
+    if (agora < inicioTs) {
+      // Antes da janela abrir: o próximo disparo é a própria abertura (hora_inicio)
+      slotTs = inicioTs;
+      proximoSlotTs = inicioTs;
+    } else {
+      const n = Math.floor((agora - inicioTs) / intervaloMs);
+      slotTs = inicioTs + n * intervaloMs;
+      proximoSlotTs = slotTs + intervaloMs;
+      // Se o próximo slot ultrapassa o fim, vai para a abertura de amanhã
+      if (proximoSlotTs >= fimTs) {
+        const amanha = new Date(inicio);
+        amanha.setDate(amanha.getDate() + 1);
+        proximoSlotTs = amanha.getTime();
+      }
+    }
+    return { slotTs, proximoSlotTs, inicioTs, fimTs };
+  }
+
+  // Gera todos os horários de disparo futuros dentro da janela atual (ou da próxima).
+  // Permite agendar todas as notificações do dia de uma vez (mais confiável).
+  function gerarSlotsFuturos(horaInicio: string | null, horaFim: string | null, intervaloMin: number, max = 24): number[] {
+    const agora = Date.now();
+    const { inicioTs, fimTs } = calcularSlotAtual(horaInicio, horaFim, intervaloMin);
+    const intervaloMs = intervaloMin * 60_000;
+    const slots: number[] = [];
+    for (let t = inicioTs; t < fimTs && slots.length < max; t += intervaloMs) {
+      if (t > agora) slots.push(t);
+    }
+    return slots;
   }
 
   async function gerenciarAlertasDeRonda(rotas: any[]) {
@@ -297,22 +343,12 @@ export default function VigilanteRondas({ navigation, route }: any) {
     }
     for (const rota of rotas) {
       if (!rota.intervalo_minutos) continue;
-      const { proximoSlotTs } = calcularSlotAtual(rota.hora_inicio ?? null, rota.intervalo_minutos);
 
-      // Não agenda se o próximo slot já passou de hora_fim
-      if (rota.hora_fim) {
-        const [fh, fm] = rota.hora_fim.split(':').map(Number);
-        const fimHoje = new Date(proximoSlotTs);
-        fimHoje.setHours(fh, fm, 0, 0);
-        // Turno noturno: hora_fim < hora_inicio → fim é no dia seguinte
-        if (rota.hora_inicio) {
-          const [ih] = rota.hora_inicio.split(':').map(Number);
-          if (fh < ih) fimHoje.setDate(fimHoje.getDate() + 1);
-        }
-        if (proximoSlotTs >= fimHoje.getTime()) continue;
-      }
+      // Agenda TODOS os slots futuros da janela (ex: 08:00, 09:00, ..., 17:00).
+      // Assim as notificações disparam mesmo que o app não seja reaberto.
+      const slots = gerarSlotsFuturos(rota.hora_inicio ?? null, rota.hora_fim ?? null, rota.intervalo_minutos);
 
-      if (proximoSlotTs > Date.now()) {
+      for (const slotTs of slots) {
         await Notifications.scheduleNotificationAsync({
           content: {
             title: '⏰ Hora da Inspeção!',
@@ -323,7 +359,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
           },
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.DATE,
-            date: new Date(proximoSlotTs),
+            date: new Date(slotTs),
           },
         });
       }
@@ -624,7 +660,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
               );
             }
 
-            const { slotTs, proximoSlotTs } = calcularSlotAtual(rota.hora_inicio ?? null, rota.intervalo_minutos);
+            const { slotTs, proximoSlotTs } = calcularSlotAtual(rota.hora_inicio ?? null, rota.hora_fim ?? null, rota.intervalo_minutos);
 
             // Verifica se já foi executada neste slot
             const ultimaExecTs = rota.ultima_execucao ? new Date(rota.ultima_execucao).getTime() : 0;
@@ -642,7 +678,10 @@ export default function VigilanteRondas({ navigation, route }: any) {
               const proxData = new Date(referencia);
               const hh = proxData.getHours().toString().padStart(2, '0');
               const mm = proxData.getMinutes().toString().padStart(2, '0');
-              textoBotao = execucaoNoSlot ? `✅ Próx. às ${hh}:${mm}` : `⏳ Às ${hh}:${mm}`;
+              // Indica "amanhã" se o próximo slot cair em outro dia
+              const ehAmanha = proxData.getDate() !== new Date().getDate() || proxData.getMonth() !== new Date().getMonth();
+              const sufixo = ehAmanha ? ' (amanhã)' : '';
+              textoBotao = execucaoNoSlot ? `✅ Próx. às ${hh}:${mm}${sufixo}` : `⏳ Às ${hh}:${mm}${sufixo}`;
               corBotao = execucaoNoSlot ? '#16a34a' : '#94a3b8';
             }
 

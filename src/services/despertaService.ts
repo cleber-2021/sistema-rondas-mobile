@@ -1,6 +1,23 @@
 ﻿import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import api from './api';
+
+// Garante que o canal de alarme do desperta exista (idempotente).
+// Evita corrida com a criação de canais no App.tsx.
+async function garantirCanalDesperta() {
+  if (Platform.OS !== 'android') return;
+  await Notifications.setNotificationChannelAsync('desperta-porteiro-sirene', {
+    name: 'Desperta Porteiro (Sirene)',
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 1000, 500, 1000, 500, 1000, 500, 1000, 500, 1000],
+    lightColor: '#f59e0b',
+    sound: 'sirene.mp3',
+    bypassDnd: true,
+    enableVibrate: true,
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
+}
 
 export interface DespertaConfig {
   id: string;
@@ -19,11 +36,15 @@ export function gerarSlotKey(despertaId: string, hora: string): string {
   return `${despertaId}_${dataStr}_${hora.replace(':', '')}`;
 }
 
-// dias_semana armazenado como "0,1,2,3,4,5,6" (getDay() do JS)
+// dias_semana é um BITMASK de 7 posições: "D,S,T,Q,Q,S,S" onde cada posição
+// (índice 0=Dom ... 6=Sáb) vale '1' (ativo) ou '0' (inativo). Mesmo formato salvo
+// pelo painel web em DespertaPorteiro.tsx (stringDosDias).
 function isDiaAtivo(diasSemana: string | null): boolean {
   if (!diasSemana) return true;
-  const hoje = new Date().getDay();
-  return diasSemana.split(',').map(Number).includes(hoje);
+  const hoje = new Date().getDay(); // 0=Dom ... 6=Sáb
+  const dias = diasSemana.split(',');
+  if (dias.length !== 7) return true; // formato inesperado → não bloqueia
+  return dias[hoje] === '1';
 }
 
 function gerarSlots(horaInicio: string, horaFim: string, intervaloMin: number): string[] {
@@ -45,6 +66,8 @@ function gerarSlots(horaInicio: string, horaFim: string, intervaloMin: number): 
 }
 
 export async function agendarDespertas(despertaList: DespertaConfig[]) {
+  await garantirCanalDesperta();
+
   // Remove notificacoes de desperta anteriores
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
   for (const n of scheduled) {
@@ -55,6 +78,7 @@ export async function agendarDespertas(despertaList: DespertaConfig[]) {
 
   const agora = new Date();
   const horaAtualMin = agora.getHours() * 60 + agora.getMinutes();
+  let totalAgendados = 0;
 
   for (const d of despertaList) {
     if (!d.ativo) continue;
@@ -74,6 +98,7 @@ export async function agendarDespertas(despertaList: DespertaConfig[]) {
 
       const disparo = new Date();
       disparo.setHours(h, m, 0, 0);
+      totalAgendados++;
 
       await Notifications.scheduleNotificationAsync({
         content: {
@@ -92,13 +117,16 @@ export async function agendarDespertas(despertaList: DespertaConfig[]) {
       });
     }
   }
+
+  console.log(`[Desperta] ${totalAgendados} alarme(s) agendado(s) para hoje.`);
 }
 
 export async function carregarEAgendarDespertas() {
   try {
     const resp = await api.get('/desperta/mobile');
+    console.log(`[Desperta] ${Array.isArray(resp.data) ? resp.data.length : 0} configuracao(oes) recebida(s) do servidor.`);
     await agendarDespertas(resp.data);
-  } catch (e) {
-    console.log('[Desperta] Erro ao carregar:', e);
+  } catch (e: any) {
+    console.log('[Desperta] Erro ao carregar:', e?.response?.status, e?.response?.data || e?.message);
   }
 }
