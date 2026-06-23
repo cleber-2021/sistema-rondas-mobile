@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Alert, Modal, ScrollView, TextInput, Image, ActivityIndicator, AppState } from 'react-native';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as TaskManager from 'expo-task-manager';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
 import * as Notifications from 'expo-notifications';
@@ -130,12 +131,68 @@ export default function VigilanteRondas({ navigation, route }: any) {
   const rondaParaFinalizar = useRef<any>(null);
   const proximoIdxAposChecklist = useRef<number>(-1);
 
+  // === JUSTIFICATIVAS PENDENTES (bloqueia a tela até justificar todas) ===
+  const [pendentes, setPendentes] = useState<any[]>([]);
+  const [indexPendente, setIndexPendente] = useState(0);
+  const [justificativa, setJustificativa] = useState('');
+  const [salvandoJust, setSalvandoJust] = useState(false);
+  const [modalPendentes, setModalPendentes] = useState(false);
+
   useEffect(() => {
     carregarRotas();
     verificarRondaEmAndamento();
     const timerRelogio = setInterval(() => setHoraAtualDaUI(Date.now()), 10000);
     return () => clearInterval(timerRelogio);
   }, []);
+
+  // Toda vez que a tela de inspeções recebe foco, checa pendências de justificativa.
+  // O operador não consegue iniciar uma nova ronda sem justificar as perdidas.
+  useFocusEffect(
+    useCallback(() => {
+      verificarPendentesJust();
+    }, [])
+  );
+
+  async function verificarPendentesJust() {
+    try {
+      const res = await api.get('/rondas/pendentes-justificativa');
+      if (res.data.length > 0) {
+        setPendentes(res.data);
+        setIndexPendente(0);
+        setJustificativa('');
+        setModalPendentes(true);
+      } else {
+        setPendentes([]);
+        setModalPendentes(false);
+      }
+    } catch (e) {
+      console.log('Erro ao verificar pendências de justificativa:', e);
+    }
+  }
+
+  async function salvarJustificativaPendente() {
+    if (!justificativa.trim()) {
+      Alert.alert('Obrigatório', 'Descreva o motivo da inspeção não realizada.');
+      return;
+    }
+    setSalvandoJust(true);
+    try {
+      await api.post(`/rondas/justificar/${pendentes[indexPendente].id}`, { justificativa });
+      const proximo = indexPendente + 1;
+      if (proximo < pendentes.length) {
+        setIndexPendente(proximo);
+        setJustificativa('');
+      } else {
+        // Todas justificadas → libera a tela
+        setModalPendentes(false);
+        setPendentes([]);
+      }
+    } catch (e) {
+      Alert.alert('Erro', 'Não foi possível salvar a justificativa.');
+    } finally {
+      setSalvandoJust(false);
+    }
+  }
 
   // Persiste o pontoAtual no AsyncStorage sempre que muda, para o background task usar
   useEffect(() => {
@@ -378,6 +435,12 @@ export default function VigilanteRondas({ navigation, route }: any) {
   }
 
   async function iniciarRonda(rota: any) {
+    // Bloqueio: não permite iniciar nova ronda com justificativas pendentes
+    if (pendentes.length > 0) {
+      setModalPendentes(true);
+      Alert.alert('Justificativa pendente', 'Você precisa justificar as inspeções perdidas antes de iniciar uma nova.');
+      return;
+    }
     try {
       const res = await api.post('/rondas/iniciar', { rota_id: rota.id });
       const primeiroPonto = rota.rota_checkpoints[0];
@@ -632,6 +695,60 @@ export default function VigilanteRondas({ navigation, route }: any) {
 
   return (
     <View style={styles.container}>
+      {/* ── MODAL BLOQUEANTE: JUSTIFICATIVA DE INSPEÇÃO PERDIDA ── */}
+      <Modal visible={modalPendentes} animationType="slide" transparent={false} onRequestClose={() => {}}>
+        <View style={styles.justContainer}>
+          <View style={styles.justHeader}>
+            <Ionicons name="warning" size={32} color="#dc2626" />
+            <Text style={styles.justTitulo}>Inspeção não realizada</Text>
+            <Text style={styles.justSubtitulo}>
+              {pendentes.length > 1 ? `${indexPendente + 1} de ${pendentes.length} pendências` : '1 pendência'}
+            </Text>
+          </View>
+
+          <ScrollView style={{ flex: 1, padding: 20 }} contentContainerStyle={{ paddingBottom: 20 }}>
+            <View style={styles.justCard}>
+              <Text style={styles.justLabel}>Roteiro</Text>
+              <Text style={styles.justTexto}>{pendentes[indexPendente]?.titulo?.replace('⚠️ Inspeção Perdida — ', '')}</Text>
+              <Text style={styles.justLabel}>Data/Hora</Text>
+              <Text style={styles.justTexto}>
+                {pendentes[indexPendente]?.criado_em
+                  ? new Date(pendentes[indexPendente].criado_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                  : ''}
+              </Text>
+            </View>
+
+            <Text style={styles.justLabelBig}>Justificativa *</Text>
+            <Text style={styles.justDesc}>Descreva o motivo pelo qual a inspeção não foi realizada no horário previsto:</Text>
+            <TextInput
+              style={styles.justInput}
+              multiline
+              numberOfLines={5}
+              placeholder="Ex: Local em manutenção, emergência no posto, falha de comunicação..."
+              placeholderTextColor="#94a3b8"
+              value={justificativa}
+              onChangeText={setJustificativa}
+              textAlignVertical="top"
+            />
+          </ScrollView>
+
+          <View style={styles.justFooter}>
+            <TouchableOpacity
+              style={[styles.justBtn, salvandoJust && { opacity: 0.7 }]}
+              onPress={salvarJustificativaPendente}
+              disabled={salvandoJust}
+            >
+              {salvandoJust
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.justBtnText}>
+                    {indexPendente + 1 < pendentes.length ? 'Confirmar e continuar →' : 'Confirmar e liberar'}
+                  </Text>
+              }
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={{ position: 'absolute', top: 60, left: 20, zIndex: 10 }}>
           <Ionicons name="arrow-back" size={28} color="#fff" />
@@ -889,4 +1006,18 @@ const styles = StyleSheet.create({
   btnFotoText: { color: '#0284c7', fontWeight: '600' },
   btnModal: { padding: 14, borderRadius: 8, alignItems: 'center' },
   btnModalText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  // Modal bloqueante de justificativa
+  justContainer: { flex: 1, backgroundColor: '#f8fafc' },
+  justHeader: { backgroundColor: '#1e293b', padding: 30, paddingTop: 60, alignItems: 'center', gap: 8 },
+  justTitulo: { fontSize: 22, fontWeight: 'bold', color: '#fff', marginTop: 8 },
+  justSubtitulo: { fontSize: 14, color: '#94a3b8', backgroundColor: '#334155', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
+  justCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 20, borderLeftWidth: 4, borderLeftColor: '#dc2626' },
+  justLabel: { fontSize: 11, fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', marginTop: 8 },
+  justTexto: { fontSize: 15, color: '#1e293b', fontWeight: '600', marginTop: 2 },
+  justLabelBig: { fontSize: 15, fontWeight: 'bold', color: '#1e293b', marginBottom: 4 },
+  justDesc: { fontSize: 13, color: '#64748b', marginBottom: 12, lineHeight: 18 },
+  justInput: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, padding: 14, fontSize: 15, color: '#1e293b', minHeight: 120 },
+  justFooter: { padding: 20, paddingBottom: 40, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e2e8f0' },
+  justBtn: { backgroundColor: '#1a1a1a', padding: 16, borderRadius: 10, alignItems: 'center' },
+  justBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
 });

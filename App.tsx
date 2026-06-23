@@ -84,6 +84,11 @@ export default function App() {
 
   const [despertaAtiva, setDespertaAtiva] = useState<{ id: string; nome: string; slotKey: string } | null>(null);
 
+  // Hook recomendado pelo Expo: retorna a última resposta de notificação,
+  // inclusive quando o app é aberto a partir de fechado (cold start).
+  const ultimaResposta = Notifications.useLastNotificationResponse();
+  const respostaProcessada = React.useRef<string | null>(null);
+
   useEffect(() => {
     registrarHandlerSessaoExpirada(() => {
       const irParaLogin = () => {
@@ -126,15 +131,25 @@ export default function App() {
     }
   }
 
+  // Processa a resposta vinda do hook (cobre cold start e app em background/aberto).
+  // Dedup por identificador para não reabrir o mesmo alarme duas vezes.
   useEffect(() => {
-    // Listener para notificações tocadas enquanto o app já está aberto ou em background
-    const subscription = Notifications.addNotificationResponseReceivedListener(processarRespostaNotificacao);
+    if (!ultimaResposta) return;
+    const id = ultimaResposta.notification.request.identifier;
+    if (respostaProcessada.current === id) return;
+    respostaProcessada.current = id;
+    console.log('[Notif] Resposta recebida:', ultimaResposta.notification.request.content.data);
+    processarRespostaNotificacao(ultimaResposta);
+  }, [ultimaResposta]);
 
-    // Verifica se o app foi aberto pelo toque numa notificação (app estava fechado)
-    Notifications.getLastNotificationResponseAsync().then(response => {
-      if (response) processarRespostaNotificacao(response);
+  // Listener adicional para taps com o app já aberto em primeiro plano
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+      const id = response.notification.request.identifier;
+      if (respostaProcessada.current === id) return;
+      respostaProcessada.current = id;
+      processarRespostaNotificacao(response);
     });
-
     return () => subscription.remove();
   }, []);
 
