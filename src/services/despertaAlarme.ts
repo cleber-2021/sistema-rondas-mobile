@@ -7,6 +7,7 @@ import notifee, {
   AndroidImportance,
   AndroidCategory,
   AndroidVisibility,
+  AndroidNotificationSetting,
   TriggerType,
   TimestampTrigger,
 } from '@notifee/react-native';
@@ -14,6 +15,21 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 const CANAL_ALARME = 'desperta-alarme';
+
+// Garante permissão de notificação e de alarme exato (necessário no Android 12+).
+// Sem o alarme exato habilitado, o disparo agendado não funciona.
+async function garantirPermissoes() {
+  try {
+    await notifee.requestPermission();
+    const settings = await notifee.getNotificationSettings();
+    if (settings.android.alarm !== AndroidNotificationSetting.ENABLED) {
+      // Abre a tela de configurações para o usuário habilitar alarmes exatos
+      await notifee.openAlarmPermissionSettingsIfNeeded();
+    }
+  } catch (e) {
+    console.log('[DespertaAlarme] Erro ao garantir permissões:', e);
+  }
+}
 
 export interface DespertaConfig {
   id: string;
@@ -82,6 +98,7 @@ async function cancelarAlarmesAnteriores() {
 
 export async function agendarAlarmesDesperta(lista: DespertaConfig[]) {
   if (Platform.OS !== 'android') return;
+  await garantirPermissoes();
   await criarCanalAlarme();
   await cancelarAlarmesAnteriores();
 
@@ -113,35 +130,40 @@ export async function agendarAlarmesDesperta(lista: DespertaConfig[]) {
         alarmManager: { allowWhileIdle: true },
       };
 
-      await notifee.createTriggerNotification(
-        {
-          id: `desperta_${slotKey}`,
-          title: '🔔 DESPERTA PORTEIRO',
-          body: `${d.nome} — Confirme sua presença AGORA!`,
-          data: {
-            tipo: 'DESPERTA_PORTEIRO',
-            despertaId: d.id,
-            nome: d.nome,
-            slotKey,
-            disparoEm: disparo.toISOString(),
+      try {
+        await notifee.createTriggerNotification(
+          {
+            id: `desperta_${slotKey}`,
+            title: '🔔 DESPERTA PORTEIRO',
+            body: `${d.nome} — Confirme sua presença AGORA!`,
+            data: {
+              tipo: 'DESPERTA_PORTEIRO',
+              despertaId: d.id,
+              nome: d.nome,
+              slotKey,
+              disparoEm: disparo.toISOString(),
+            },
+            android: {
+              channelId: CANAL_ALARME,
+              importance: AndroidImportance.HIGH,
+              category: AndroidCategory.ALARM,
+              // Full-screen intent: abre a tela do app sozinho, mesmo bloqueado
+              fullScreenAction: { id: 'default' },
+              pressAction: { id: 'default' },
+              ongoing: true,        // não pode ser deslizada para fora
+              autoCancel: false,
+              loopSound: true,      // sirene em loop até confirmar
+              sound: 'sirene',
+              vibrationPattern: [300, 600, 300, 600],
+            },
           },
-          android: {
-            channelId: CANAL_ALARME,
-            importance: AndroidImportance.HIGH,
-            category: AndroidCategory.ALARM,
-            // Full-screen intent: abre a tela do app sozinho, mesmo bloqueado
-            fullScreenAction: { id: 'default' },
-            pressAction: { id: 'default' },
-            ongoing: true,        // não pode ser deslizada para fora
-            autoCancel: false,
-            loopSound: true,      // sirene em loop até confirmar
-            sound: 'sirene',
-            vibrationPattern: [300, 600, 300, 600],
-          },
-        },
-        trigger
-      );
-      total++;
+          trigger
+        );
+        total++;
+        console.log(`[DespertaAlarme] agendado ${d.nome} às ${slot} (${disparo.toISOString()})`);
+      } catch (e) {
+        console.log(`[DespertaAlarme] FALHA ao agendar ${d.nome} às ${slot}:`, e);
+      }
     }
   }
 
