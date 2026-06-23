@@ -2,6 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import api from './api';
+import { agendarAlarmesDesperta } from './despertaAlarme';
 
 // Garante que o canal de alarme do desperta exista (idempotente).
 // Evita corrida com a criação de canais no App.tsx.
@@ -104,7 +105,7 @@ export async function agendarDespertas(despertaList: DespertaConfig[]) {
         content: {
           title: '🔔 DESPERTA PORTEIRO',
           body: `${d.nome} - Confirme sua presenca AGORA!`,
-          data: { tipo: 'DESPERTA_PORTEIRO', despertaId: d.id, nome: d.nome, slotKey },
+          data: { tipo: 'DESPERTA_PORTEIRO', despertaId: d.id, nome: d.nome, slotKey, disparoEm: disparo.toISOString() },
           sound: 'sirene.mp3',
           priority: Notifications.AndroidNotificationPriority.MAX,
           vibrate: [0, 1000, 500, 1000, 500, 1000, 500, 1000],
@@ -125,7 +126,8 @@ export async function carregarEAgendarDespertas() {
   try {
     const resp = await api.get('/desperta/mobile');
     console.log(`[Desperta] ${Array.isArray(resp.data) ? resp.data.length : 0} configuracao(oes) recebida(s) do servidor.`);
-    await agendarDespertas(resp.data);
+    // Usa notifee (full-screen intent + sirene em loop) para o alarme real.
+    await agendarAlarmesDesperta(resp.data);
   } catch (e: any) {
     console.log('[Desperta] Erro ao carregar:', e?.response?.status, e?.response?.data || e?.message);
   }

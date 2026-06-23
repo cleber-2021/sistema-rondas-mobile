@@ -6,6 +6,7 @@ import {
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
+import { pararAlarme } from '../services/despertaAlarme';
 
 // Padrão de vibração: vibra 1s, pausa 0.5s, repete
 const VIBRATION_PATTERN = [0, 1000, 500];
@@ -14,10 +15,11 @@ interface Props {
   despertaId: string;
   nome: string;
   slotKey: string;
+  disparoEm?: string;
   onConfirmado: () => void;
 }
 
-export default function DespertaAlarm({ despertaId, nome, slotKey, onConfirmado }: Props) {
+export default function DespertaAlarm({ despertaId, nome, slotKey, disparoEm, onConfirmado }: Props) {
   const [senha, setSenha] = useState('');
   const [erro, setErro] = useState('');
   const [confirmando, setConfirmando] = useState(false);
@@ -41,9 +43,11 @@ export default function DespertaAlarm({ despertaId, nome, slotKey, onConfirmado 
     setConfirmando(true);
     setErro('');
     try {
-      await api.post(`/desperta/${despertaId}/confirmar`, { senha: senha.trim(), slot_key: slotKey });
+      await api.post(`/desperta/${despertaId}/confirmar`, { senha: senha.trim(), slot_key: slotKey, disparo_em: disparoEm });
       Vibration.cancel();
       vibrandoRef.current = false;
+      // Para a sirene do notifee (loop) e remove a notificação ongoing
+      await pararAlarme(slotKey);
       // Salva localmente que já confirmou este slot
       await AsyncStorage.setItem(`@desperta_confirmado:${despertaId}:${slotKey}`, '1');
       onConfirmado();

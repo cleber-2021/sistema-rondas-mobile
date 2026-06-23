@@ -7,6 +7,7 @@ import * as Notifications from 'expo-notifications';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import notifee, { EventType } from '@notifee/react-native';
 import api, { registrarHandlerSessaoExpirada } from './src/services/api';
 import DespertaAlarm from './src/screens/DespertaAlarm';
 import { carregarEAgendarDespertas } from './src/services/despertaService';
@@ -82,7 +83,7 @@ export default function App() {
   const [rotaInicial, setRotaInicial] = useState('Login');
   const navigationRef = React.useRef<any>(null);
 
-  const [despertaAtiva, setDespertaAtiva] = useState<{ id: string; nome: string; slotKey: string } | null>(null);
+  const [despertaAtiva, setDespertaAtiva] = useState<{ id: string; nome: string; slotKey: string; disparoEm?: string } | null>(null);
 
   // Hook recomendado pelo Expo: retorna a última resposta de notificação,
   // inclusive quando o app é aberto a partir de fechado (cold start).
@@ -127,7 +128,7 @@ export default function App() {
       tentarNavegar('SupervisorPanico');
     }
     else if (data?.tipo === 'DESPERTA_PORTEIRO') {
-      setDespertaAtiva({ id: data.despertaId, nome: data.nome, slotKey: data.slotKey });
+      setDespertaAtiva({ id: data.despertaId, nome: data.nome, slotKey: data.slotKey, disparoEm: data.disparoEm });
     }
   }
 
@@ -151,6 +152,38 @@ export default function App() {
       processarRespostaNotificacao(response);
     });
     return () => subscription.remove();
+  }, []);
+
+  // ─── EVENTOS DO NOTIFEE (alarme do desperta porteiro) ─────────────────────
+  // Abre a tela de alarme quando o full-screen intent dispara (app aberto) ou
+  // quando o app é iniciado pela notificação de alarme (estava fechado/bloqueado).
+  useEffect(() => {
+    function abrirAlarme(data: any) {
+      if (data?.tipo !== 'DESPERTA_PORTEIRO') return;
+      setDespertaAtiva({
+        id: data.despertaId,
+        nome: data.nome,
+        slotKey: data.slotKey,
+        disparoEm: data.disparoEm,
+      });
+    }
+
+    // App aberto pelo alarme (estava fechado)
+    notifee.getInitialNotification().then(initial => {
+      if (initial?.notification?.data) abrirAlarme(initial.notification.data);
+    });
+
+    // Alarme disparado/tocado com o app em primeiro plano
+    const unsubscribe = notifee.onForegroundEvent(({ type, detail }) => {
+      if (
+        (type === EventType.DELIVERED || type === EventType.PRESS) &&
+        detail.notification?.data
+      ) {
+        abrirAlarme(detail.notification.data);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -266,6 +299,7 @@ export default function App() {
             despertaId={despertaAtiva.id}
             nome={despertaAtiva.nome}
             slotKey={despertaAtiva.slotKey}
+            disparoEm={despertaAtiva.disparoEm}
             onConfirmado={() => setDespertaAtiva(null)}
           />
         </Modal>
