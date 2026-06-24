@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { LogBox, Platform, ActivityIndicator, View, Modal } from 'react-native';
+import { LogBox, Platform, ActivityIndicator, View, Modal, AppState } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
@@ -73,6 +73,38 @@ TaskManager.defineTask(BACKGROUND_PANICO_TASK, async () => {
     return BackgroundFetch.BackgroundFetchResult.NewData;
   } catch (e) {
     return BackgroundFetch.BackgroundFetchResult.Failed;
+  }
+});
+
+// ─── TASK DE NOTIFICAÇÃO EM BACKGROUND (push silencioso DESPERTA_SYNC) ──────────
+// Quando o servidor envia um push de sincronização (ao inativar/editar desperta),
+// este handler roda mesmo com o app fechado e reprograma os alarmes — cancelando
+// os que saíram da lista ativa.
+const BACKGROUND_NOTIFICATION_TASK = 'background-notification-sync';
+
+TaskManager.defineTask(BACKGROUND_NOTIFICATION_TASK, async ({ data, error }: any) => {
+  if (error) return;
+  try {
+    // A estrutura do payload varia conforme a plataforma/origem
+    const d =
+      data?.notification?.data ??
+      data?.data ??
+      data?.notification?.request?.content?.data ??
+      {};
+    if (d?.tipo === 'DESPERTA_SYNC') {
+      const token = await AsyncStorage.getItem('@RondasApp:token');
+      const userString = await AsyncStorage.getItem('@RondasApp:user');
+      if (token && userString) {
+        const usuario = JSON.parse(userString);
+        if (usuario.perfil === 'POSTO_SERVICO') {
+          api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+          await carregarEAgendarDespertas();
+          console.log('[Sync] Desperta re-sincronizado via push.');
+        }
+      }
+    }
+  } catch (e) {
+    console.log('[Sync] Erro no handler de sync:', e);
   }
 });
 
@@ -154,6 +186,22 @@ export default function App() {
     return () => subscription.remove();
   }, []);
 
+  // Push de sincronização recebido com o app em primeiro plano
+  useEffect(() => {
+    const sub = Notifications.addNotificationReceivedListener(async (notification) => {
+      const d = notification.request.content.data as any;
+      if (d?.tipo === 'DESPERTA_SYNC') {
+        const userString = await AsyncStorage.getItem('@RondasApp:user');
+        if (!userString) return;
+        const usuario = JSON.parse(userString);
+        if (usuario.perfil === 'POSTO_SERVICO') {
+          carregarEAgendarDespertas().catch(() => {});
+        }
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
   // ─── EVENTOS DO NOTIFEE (alarme do desperta porteiro) ─────────────────────
   // Abre a tela de alarme quando o full-screen intent dispara (app aberto) ou
   // quando o app é iniciado pela notificação de alarme (estava fechado/bloqueado).
@@ -184,6 +232,22 @@ export default function App() {
     });
 
     return () => unsubscribe();
+  }, []);
+
+  // Re-sincroniza os alarmes do desperta sempre que o app volta ao primeiro plano.
+  // Assim, inativar/alterar um desperta no painel passa a valer assim que o
+  // operador reabre o app (cancela os alarmes que saíram da lista ativa).
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', async (state) => {
+      if (state !== 'active') return;
+      const userString = await AsyncStorage.getItem('@RondasApp:user');
+      if (!userString) return;
+      const usuario = JSON.parse(userString);
+      if (usuario.perfil === 'POSTO_SERVICO') {
+        carregarEAgendarDespertas().catch(() => {});
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   useEffect(() => {
@@ -232,6 +296,13 @@ export default function App() {
         });
       } catch (e) {
         console.warn('Background fetch nao pode ser registrado:', e);
+      }
+
+      // Registra o handler de push de sincronização do desperta (background)
+      try {
+        await Notifications.registerTaskAsync(BACKGROUND_NOTIFICATION_TASK);
+      } catch (e) {
+        console.warn('Task de notificacao nao pode ser registrada:', e);
       }
     }
 
