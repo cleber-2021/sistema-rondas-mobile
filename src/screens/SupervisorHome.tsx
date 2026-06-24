@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, Image } from 'react-na
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
-import api from '../services/api';
+import api, { cancelarTodasNotificacoes } from '../services/api';
 
 export default function SupervisorHome({ navigation }: any) {
   const [nome, setNome] = useState('');
@@ -59,7 +59,7 @@ export default function SupervisorHome({ navigation }: any) {
 
   async function deslogar() {
     try { await api.delete('/auth/push-token'); } catch {}
-    await Notifications.cancelAllScheduledNotificationsAsync();
+    await cancelarTodasNotificacoes();
     await AsyncStorage.clear();
     api.defaults.headers.common['Authorization'] = '';
     navigation.replace('Login');

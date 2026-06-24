@@ -294,7 +294,7 @@ export default function App() {
       </NavigationContainer>
 
       {despertaAtiva && (
-        <Modal visible animationType="slide" statusBarTranslucent>
+        <Modal visible animationType="slide" statusBarTranslucent onRequestClose={() => {}}>
           <DespertaAlarm
             despertaId={despertaAtiva.id}
             nome={despertaAtiva.nome}

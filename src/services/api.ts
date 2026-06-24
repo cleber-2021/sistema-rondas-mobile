@@ -1,5 +1,19 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
+import notifee from '@notifee/react-native';
+
+// Cancela todas as notificações locais (agendadas e exibidas), expo + notifee.
+// Usado ao sair/sessão expirar para o aparelho parar de receber alertas.
+export async function cancelarTodasNotificacoes() {
+  try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch {}
+  try { await Notifications.dismissAllNotificationsAsync(); } catch {}
+  try { await notifee.cancelAllNotifications(); } catch {}
+  try {
+    const ids = await notifee.getTriggerNotificationIds();
+    for (const id of ids) { try { await notifee.cancelTriggerNotification(id); } catch {} }
+  } catch {}
+}
 
 const api = axios.create({
   baseURL: 'https://sulcleansm.ddns.com.br:3443/api',
@@ -22,6 +36,7 @@ async function limparSessao() {
   if (deslogando) return;
   deslogando = true;
   try {
+    await cancelarTodasNotificacoes();
     await AsyncStorage.multiRemove(['@RondasApp:token', '@RondasApp:user']);
     api.defaults.headers.common['Authorization'] = '';
     onSessaoExpirada?.();

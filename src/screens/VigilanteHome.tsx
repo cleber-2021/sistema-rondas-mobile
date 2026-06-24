@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { useFocusEffect } from '@react-navigation/native';
-import api from '../services/api';
+import api, { cancelarTodasNotificacoes } from '../services/api';
 import { carregarEAgendarDespertas } from '../services/despertaService';
 
 interface OcorrenciaPendente {
@@ -84,7 +84,8 @@ export default function VigilanteHome({ navigation }: any) {
 
   async function deslogar() {
     try { await api.delete('/auth/push-token'); } catch {}
-    await Notifications.cancelAllScheduledNotificationsAsync();
+    // Cancela todas as notificações locais (expo agendadas + notifee/desperta)
+    await cancelarTodasNotificacoes();
     await AsyncStorage.clear();
     api.defaults.headers.common['Authorization'] = '';
     navigation.replace('Login');

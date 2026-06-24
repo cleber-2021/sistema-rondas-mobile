@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Vibration, Alert, KeyboardAvoidingView, Platform, ScrollView
+  Vibration, Alert, KeyboardAvoidingView, Platform, ScrollView, BackHandler
 } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -27,9 +27,14 @@ export default function DespertaAlarm({ despertaId, nome, slotKey, disparoEm, on
 
   useEffect(() => {
     iniciarVibracaoLoop();
+
+    // Bloqueia o botão "voltar" do Android: a tela só sai com a senha correta.
+    const backSub = BackHandler.addEventListener('hardwareBackPress', () => true);
+
     return () => {
       Vibration.cancel();
       vibrandoRef.current = false;
+      backSub.remove();
     };
   }, []);
 
