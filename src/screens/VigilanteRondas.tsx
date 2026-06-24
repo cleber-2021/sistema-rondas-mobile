@@ -131,12 +131,11 @@ export default function VigilanteRondas({ navigation, route }: any) {
   const rondaParaFinalizar = useRef<any>(null);
   const proximoIdxAposChecklist = useRef<number>(-1);
 
-  // === JUSTIFICATIVAS PENDENTES (bloqueia a tela até justificar todas) ===
-  const [pendentes, setPendentes] = useState<any[]>([]);
-  const [indexPendente, setIndexPendente] = useState(0);
-  const [justificativa, setJustificativa] = useState('');
-  const [salvandoJust, setSalvandoJust] = useState(false);
-  const [modalPendentes, setModalPendentes] = useState(false);
+  // === JUSTIFICATIVAS PENDENTES ===
+  // A tela de justificativa fica SOMENTE na VigilanteHome (tela estável, sem timers).
+  // Aqui apenas detectamos se há pendências para bloquear o início de novas rondas
+  // e redirecionar o operador para justificá-las.
+  const [temPendencias, setTemPendencias] = useState(false);
 
   useEffect(() => {
     carregarRotas();
@@ -145,54 +144,28 @@ export default function VigilanteRondas({ navigation, route }: any) {
     return () => clearInterval(timerRelogio);
   }, []);
 
-  // Toda vez que a tela de inspeções recebe foco, checa pendências de justificativa.
-  // O operador não consegue iniciar uma nova ronda sem justificar as perdidas.
+  // Ao focar a tela, verifica pendências. Se houver e não estiver em ronda,
+  // redireciona para a VigilanteHome (onde o operador justifica).
   useFocusEffect(
     useCallback(() => {
-      verificarPendentesJust();
+      let ativo = true;
+      (async () => {
+        try {
+          const res = await api.get('/rondas/pendentes-justificativa');
+          if (!ativo) return;
+          const tem = res.data.length > 0;
+          setTemPendencias(tem);
+          const emRonda = await AsyncStorage.getItem('@Ronda:emAndamento');
+          if (tem && !emRonda) {
+            navigation.navigate('VigilanteHome');
+          }
+        } catch (e) {
+          console.log('Erro ao verificar pendências:', e);
+        }
+      })();
+      return () => { ativo = false; };
     }, [])
   );
-
-  async function verificarPendentesJust() {
-    try {
-      const res = await api.get('/rondas/pendentes-justificativa');
-      if (res.data.length > 0) {
-        setPendentes(res.data);
-        setIndexPendente(0);
-        setJustificativa('');
-        setModalPendentes(true);
-      } else {
-        setPendentes([]);
-        setModalPendentes(false);
-      }
-    } catch (e) {
-      console.log('Erro ao verificar pendências de justificativa:', e);
-    }
-  }
-
-  async function salvarJustificativaPendente() {
-    if (!justificativa.trim()) {
-      Alert.alert('Obrigatório', 'Descreva o motivo da inspeção não realizada.');
-      return;
-    }
-    setSalvandoJust(true);
-    try {
-      await api.post(`/rondas/justificar/${pendentes[indexPendente].id}`, { justificativa });
-      const proximo = indexPendente + 1;
-      if (proximo < pendentes.length) {
-        setIndexPendente(proximo);
-        setJustificativa('');
-      } else {
-        // Todas justificadas → libera a tela
-        setModalPendentes(false);
-        setPendentes([]);
-      }
-    } catch (e) {
-      Alert.alert('Erro', 'Não foi possível salvar a justificativa.');
-    } finally {
-      setSalvandoJust(false);
-    }
-  }
 
   // Persiste o pontoAtual no AsyncStorage sempre que muda, para o background task usar
   useEffect(() => {
@@ -436,9 +409,9 @@ export default function VigilanteRondas({ navigation, route }: any) {
 
   async function iniciarRonda(rota: any) {
     // Bloqueio: não permite iniciar nova ronda com justificativas pendentes
-    if (pendentes.length > 0) {
-      setModalPendentes(true);
+    if (temPendencias) {
       Alert.alert('Justificativa pendente', 'Você precisa justificar as inspeções perdidas antes de iniciar uma nova.');
+      navigation.navigate('VigilanteHome');
       return;
     }
     try {
@@ -695,60 +668,6 @@ export default function VigilanteRondas({ navigation, route }: any) {
 
   return (
     <View style={styles.container}>
-      {/* ── MODAL BLOQUEANTE: JUSTIFICATIVA DE INSPEÇÃO PERDIDA ── */}
-      <Modal visible={modalPendentes} animationType="slide" transparent={false} onRequestClose={() => {}}>
-        <View style={styles.justContainer}>
-          <View style={styles.justHeader}>
-            <Ionicons name="warning" size={32} color="#dc2626" />
-            <Text style={styles.justTitulo}>Inspeção não realizada</Text>
-            <Text style={styles.justSubtitulo}>
-              {pendentes.length > 1 ? `${indexPendente + 1} de ${pendentes.length} pendências` : '1 pendência'}
-            </Text>
-          </View>
-
-          <ScrollView style={{ flex: 1, padding: 20 }} contentContainerStyle={{ paddingBottom: 20 }}>
-            <View style={styles.justCard}>
-              <Text style={styles.justLabel}>Roteiro</Text>
-              <Text style={styles.justTexto}>{pendentes[indexPendente]?.titulo?.replace('⚠️ Inspeção Perdida — ', '')}</Text>
-              <Text style={styles.justLabel}>Data/Hora</Text>
-              <Text style={styles.justTexto}>
-                {pendentes[indexPendente]?.criado_em
-                  ? new Date(pendentes[indexPendente].criado_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-                  : ''}
-              </Text>
-            </View>
-
-            <Text style={styles.justLabelBig}>Justificativa *</Text>
-            <Text style={styles.justDesc}>Descreva o motivo pelo qual a inspeção não foi realizada no horário previsto:</Text>
-            <TextInput
-              style={styles.justInput}
-              multiline
-              numberOfLines={5}
-              placeholder="Ex: Local em manutenção, emergência no posto, falha de comunicação..."
-              placeholderTextColor="#94a3b8"
-              value={justificativa}
-              onChangeText={setJustificativa}
-              textAlignVertical="top"
-            />
-          </ScrollView>
-
-          <View style={styles.justFooter}>
-            <TouchableOpacity
-              style={[styles.justBtn, salvandoJust && { opacity: 0.7 }]}
-              onPress={salvarJustificativaPendente}
-              disabled={salvandoJust}
-            >
-              {salvandoJust
-                ? <ActivityIndicator color="#fff" />
-                : <Text style={styles.justBtnText}>
-                    {indexPendente + 1 < pendentes.length ? 'Confirmar e continuar →' : 'Confirmar e liberar'}
-                  </Text>
-              }
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={{ position: 'absolute', top: 60, left: 20, zIndex: 10 }}>
           <Ionicons name="arrow-back" size={28} color="#fff" />
