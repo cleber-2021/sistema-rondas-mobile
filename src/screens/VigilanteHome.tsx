@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal, TextInput, ScrollView, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput, ScrollView, ActivityIndicator, Image, KeyboardAvoidingView, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -123,55 +123,62 @@ export default function VigilanteHome({ navigation }: any) {
   return (
     <View style={styles.container}>
 
-      {/* ── MODAL BLOQUEANTE: JUSTIFICATIVA DE INSPEÇÃO PERDIDA ── */}
-      <Modal visible={modalVisivel} animationType="slide" transparent={false}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Ionicons name="warning" size={32} color="#dc2626" />
-            <Text style={styles.modalTitulo}>Inspeção não realizada</Text>
-            <Text style={styles.modalSubtitulo}>
-              {pendentes.length > 1 ? `${indexAtual + 1} de ${pendentes.length} pendências` : '1 pendência'}
-            </Text>
-          </View>
-
-          <ScrollView style={styles.modalBody} contentContainerStyle={{ paddingBottom: 20 }}>
-            <View style={styles.cardOcorrencia}>
-              <Text style={styles.labelOcorrencia}>Roteiro</Text>
-              <Text style={styles.textoOcorrencia}>{ocorrenciaAtual?.titulo?.replace('⚠️ Inspeção Perdida — ', '')}</Text>
-              <Text style={styles.labelOcorrencia}>Data/Hora</Text>
-              <Text style={styles.textoOcorrencia}>{dataFormatada}</Text>
+      {/* ── OVERLAY BLOQUEANTE: JUSTIFICATIVA DE INSPEÇÃO PERDIDA ──
+          Usa um overlay absoluto (não um <Modal>) para evitar o bug de
+          teclado piscando do RN Modal com a nova arquitetura no Android. */}
+      {modalVisivel && (
+        <KeyboardAvoidingView
+          style={styles.overlayJust}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="warning" size={32} color="#dc2626" />
+              <Text style={styles.modalTitulo}>Inspeção não realizada</Text>
+              <Text style={styles.modalSubtitulo}>
+                {pendentes.length > 1 ? `${indexAtual + 1} de ${pendentes.length} pendências` : '1 pendência'}
+              </Text>
             </View>
 
-            <Text style={styles.labelJust}>Justificativa *</Text>
-            <Text style={styles.labelJustDesc}>Descreva o motivo pelo qual a inspeção não foi realizada no horário previsto:</Text>
-            <TextInput
-              style={styles.inputJust}
-              multiline
-              numberOfLines={5}
-              placeholder="Ex: Local em manutenção, emergência no posto, falha de comunicação..."
-              placeholderTextColor="#94a3b8"
-              value={justificativa}
-              onChangeText={setJustificativa}
-              textAlignVertical="top"
-            />
-          </ScrollView>
+            <ScrollView style={styles.modalBody} contentContainerStyle={{ paddingBottom: 20 }} keyboardShouldPersistTaps="handled">
+              <View style={styles.cardOcorrencia}>
+                <Text style={styles.labelOcorrencia}>Roteiro</Text>
+                <Text style={styles.textoOcorrencia}>{ocorrenciaAtual?.titulo?.replace('⚠️ Inspeção Perdida — ', '')}</Text>
+                <Text style={styles.labelOcorrencia}>Data/Hora</Text>
+                <Text style={styles.textoOcorrencia}>{dataFormatada}</Text>
+              </View>
 
-          <View style={styles.modalFooter}>
-            <TouchableOpacity
-              style={[styles.btnConfirmar, salvando && { opacity: 0.7 }]}
-              onPress={salvarJustificativa}
-              disabled={salvando}
-            >
-              {salvando
-                ? <ActivityIndicator color="#fff" />
-                : <Text style={styles.btnConfirmarText}>
-                    {indexAtual + 1 < pendentes.length ? 'Confirmar e continuar →' : 'Confirmar e entrar'}
-                  </Text>
-              }
-            </TouchableOpacity>
+              <Text style={styles.labelJust}>Justificativa *</Text>
+              <Text style={styles.labelJustDesc}>Descreva o motivo pelo qual a inspeção não foi realizada no horário previsto:</Text>
+              <TextInput
+                style={styles.inputJust}
+                multiline
+                numberOfLines={5}
+                placeholder="Ex: Local em manutenção, emergência no posto, falha de comunicação..."
+                placeholderTextColor="#94a3b8"
+                value={justificativa}
+                onChangeText={setJustificativa}
+                textAlignVertical="top"
+              />
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={[styles.btnConfirmar, salvando && { opacity: 0.7 }]}
+                onPress={salvarJustificativa}
+                disabled={salvando}
+              >
+                {salvando
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={styles.btnConfirmarText}>
+                      {indexAtual + 1 < pendentes.length ? 'Confirmar e continuar →' : 'Confirmar e entrar'}
+                    </Text>
+                }
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </Modal>
+        </KeyboardAvoidingView>
+      )}
 
       {/* ── TELA PRINCIPAL ── */}
       <View style={styles.header}>
@@ -256,7 +263,8 @@ const styles = StyleSheet.create({
   btnPanico: { position: 'absolute', bottom: 110, right: 20, width: 75, height: 75, borderRadius: 40, backgroundColor: '#dc2626', justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, zIndex: 100 },
   textPanico: { color: '#fff', fontWeight: 'bold', fontSize: 16, textAlign: 'center' },
 
-  // Modal de justificativa
+  // Overlay/Modal de justificativa
+  overlayJust: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000, elevation: 1000, backgroundColor: '#f8fafc' },
   modalContainer: { flex: 1, backgroundColor: '#f8fafc' },
   modalHeader: { backgroundColor: '#1e293b', padding: 30, paddingTop: 60, alignItems: 'center', gap: 8 },
   modalTitulo: { fontSize: 22, fontWeight: 'bold', color: '#fff', marginTop: 8 },
