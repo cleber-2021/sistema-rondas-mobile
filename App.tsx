@@ -15,6 +15,7 @@ import { carregarEAgendarDespertas } from './src/services/despertaService';
 import Login from './src/screens/Login';
 import SupervisorHome from './src/screens/SupervisorHome';
 import SupervisorDashboard from './src/screens/SupervisorDashboard';
+import SupervisorVisitaDetalhe from './src/screens/SupervisorVisitaDetalhe';
 import SupervisorOcorrencias from './src/screens/SupervisorOcorrencias';
 import ResponderChecklist from './src/screens/ResponderChecklist';
 import VigilanteHome from './src/screens/VigilanteHome';
@@ -353,6 +354,7 @@ export default function App() {
 
           <Stack.Screen name="SupervisorHome" component={SupervisorHome} />
           <Stack.Screen name="SupervisorDashboard" component={SupervisorDashboard} />
+          <Stack.Screen name="SupervisorVisitaDetalhe" component={SupervisorVisitaDetalhe} />
           <Stack.Screen name="SupervisorOcorrencias" component={SupervisorOcorrencias} />
           <Stack.Screen name="SupervisorPanico" component={SupervisorPanico} />
           <Stack.Screen name="ResponderChecklist" component={ResponderChecklist} />
