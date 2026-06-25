@@ -7,7 +7,6 @@ import notifee, {
   AndroidImportance,
   AndroidCategory,
   AndroidVisibility,
-  AndroidNotificationSetting,
   TriggerType,
   TimestampTrigger,
 } from '@notifee/react-native';
@@ -16,18 +15,20 @@ import { Platform } from 'react-native';
 
 const CANAL_ALARME = 'desperta-alarme';
 
-// Garante permissão de notificação e de alarme exato (necessário no Android 12+).
-// Sem o alarme exato habilitado, o disparo agendado não funciona.
+// Solicita a permissão de notificação UMA ÚNICA VEZ por sessão.
+// IMPORTANTE: não abrimos automaticamente a tela de "alarmes e lembretes"
+// (openAlarmPermissionSettingsIfNeeded) porque isso causava um loop de abrir
+// configurações → app em background → voltar → abrir de novo, fazendo a tela
+// piscar e travar o teclado. A permissão USE_EXACT_ALARM no manifesto já
+// garante o alarme exato no Android 13+.
+let permissoesSolicitadas = false;
 async function garantirPermissoes() {
+  if (permissoesSolicitadas) return;
+  permissoesSolicitadas = true;
   try {
     await notifee.requestPermission();
-    const settings = await notifee.getNotificationSettings();
-    if (settings.android.alarm !== AndroidNotificationSetting.ENABLED) {
-      // Abre a tela de configurações para o usuário habilitar alarmes exatos
-      await notifee.openAlarmPermissionSettingsIfNeeded();
-    }
   } catch (e) {
-    console.log('[DespertaAlarme] Erro ao garantir permissões:', e);
+    console.log('[DespertaAlarme] Erro ao solicitar permissão:', e);
   }
 }
 
