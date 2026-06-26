@@ -12,8 +12,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import api from '../services/api';
+
+// projectId lido automaticamente do app.json (extra.eas.projectId).
+// Assim, ao trocar de conta Expo, não é preciso editar este arquivo.
+const EAS_PROJECT_ID =
+  Constants.expoConfig?.extra?.eas?.projectId ||
+  (Constants as any).easConfig?.projectId;
 
 /**
  * Obtém o Expo Push Token do dispositivo físico.
@@ -40,8 +47,10 @@ async function obterExpoPushToken(): Promise<string | null> {
   }
 
   try {
-    // projectId vem do app.json → expo.extra.eas.projectId
-    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId: '4f2624c7-5be3-4c31-b4e3-338facfa89ce' });
+    // projectId lido do app.json automaticamente
+    const tokenData = await Notifications.getExpoPushTokenAsync(
+      EAS_PROJECT_ID ? { projectId: EAS_PROJECT_ID } : undefined
+    );
     return tokenData.data;
   } catch (e) {
     console.error('Erro ao obter push token:', e);

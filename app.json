@@ -71,10 +71,8 @@
       "expo-font"
     ],
     "extra": {
-      "eas": {
-        "projectId": "4f2624c7-5be3-4c31-b4e3-338facfa89ce"
-      }
+      "eas": {}
     },
-    "owner": "cleber.2510"
+    "owner": "clebersulcleans-team"
   }
 }
