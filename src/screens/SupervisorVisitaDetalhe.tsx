@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, TextInput } from 'react-native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -12,6 +12,8 @@ export default function SupervisorVisitaDetalhe({ navigation, route }: any) {
   const [roteiro, setRoteiro] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [iniciandoId, setIniciandoId] = useState<string | null>(null);
+  const [busca, setBusca] = useState('');
+  const [localAberto, setLocalAberto] = useState<string | null>(null);
 
   // Agrupa os itens (local+checklist) por local
   const grupos = useMemo(() => {
@@ -26,6 +28,13 @@ export default function SupervisorVisitaDetalhe({ navigation, route }: any) {
     });
     return Object.values(map);
   }, [roteiro]);
+
+  // Filtra os locais pela busca
+  const gruposFiltrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    if (!termo) return grupos;
+    return grupos.filter((g: any) => (g.local?.nome || '').toLowerCase().includes(termo));
+  }, [grupos, busca]);
 
   useFocusEffect(
     useCallback(() => {
@@ -83,35 +92,60 @@ export default function SupervisorVisitaDetalhe({ navigation, route }: any) {
         </View>
       </View>
 
+      {/* Busca de locais */}
+      {!loading && grupos.length > 0 && (
+        <View style={styles.searchContainer}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="🔍 Buscar local..."
+            placeholderTextColor="#94a3b8"
+            value={busca}
+            onChangeText={setBusca}
+            autoCapitalize="none"
+          />
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.center}><ActivityIndicator size="large" color="#2563eb" /></View>
       ) : (
         <FlatList
-          data={grupos}
+          data={gruposFiltrados}
           keyExtractor={(g: any) => g.local?.id || g.local?.nome}
-          contentContainerStyle={{ padding: 20 }}
+          contentContainerStyle={{ padding: 20, paddingTop: 10 }}
           renderItem={({ item: g }: any) => {
             const tudoFeito = g.feitos === g.checklists.length;
+            const localId = g.local?.id || g.local?.nome;
+            const aberto = localAberto === localId;
             return (
               <View style={styles.localCard}>
-                {/* Cabeçalho do local */}
-                <View style={styles.localHeader}>
+                {/* Cabeçalho do local — toca para abrir/fechar os checklists */}
+                <TouchableOpacity
+                  style={styles.localHeader}
+                  activeOpacity={0.7}
+                  onPress={() => setLocalAberto(aberto ? null : localId)}
+                >
                   <View style={{ flex: 1 }}>
                     <Text style={styles.localNome}>📍 {g.local?.nome}</Text>
                     <Text style={styles.localMeta}>
                       {PERIODO_PT[g.periodicidade] || g.periodicidade} · {g.feitos}/{g.checklists.length} checklists
                     </Text>
                   </View>
-                  {tudoFeito && (
+                  {tudoFeito ? (
                     <View style={styles.badgeFeito}>
                       <Ionicons name="checkmark-circle" size={16} color="#fff" />
                       <Text style={styles.badgeFeitoText}>Completo</Text>
                     </View>
+                  ) : (
+                    <View style={styles.badgePendente}>
+                      <Text style={styles.badgePendenteText}>{g.feitos}/{g.checklists.length}</Text>
+                    </View>
                   )}
-                </View>
+                  <Ionicons name={aberto ? 'chevron-up' : 'chevron-down'} size={22} color="#94a3b8" style={{ marginLeft: 10 }} />
+                </TouchableOpacity>
 
-                {/* Checklists do local */}
-                {g.checklists.map((it: any) => (
+                {/* Checklists do local — só aparecem quando o local está aberto */}
+                {aberto && g.checklists.map((it: any) => (
                   <View key={it.id} style={[styles.chkRow, it.feito && styles.chkRowFeito]}>
                     <Text style={styles.chkTitulo}>📋 {it.checklist.titulo}</Text>
                     {it.feito ? (
@@ -133,7 +167,7 @@ export default function SupervisorVisitaDetalhe({ navigation, route }: any) {
               </View>
             );
           }}
-          ListEmptyComponent={<Text style={styles.empty}>Nenhum local nesta rota.</Text>}
+          ListEmptyComponent={<Text style={styles.empty}>{busca ? 'Nenhum local encontrado.' : 'Nenhum local nesta rota.'}</Text>}
         />
       )}
     </View>
@@ -146,6 +180,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', padding: 25, paddingTop: 60, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
   title: { fontSize: 22, fontWeight: 'bold', color: '#1e293b' },
   subtitle: { fontSize: 14, color: '#64748b', marginTop: 4 },
+  searchContainer: { paddingHorizontal: 20, paddingTop: 15, paddingBottom: 0 },
+  searchInput: { backgroundColor: '#fff', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#cbd5e1', fontSize: 15, color: '#1e293b' },
   // Card do local (agrupado)
   localCard: { backgroundColor: '#fff', borderRadius: 12, marginBottom: 14, borderWidth: 1, borderColor: '#e2e8f0', overflow: 'hidden', elevation: 1 },
   localHeader: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: '#f1f5f9', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
@@ -159,6 +195,8 @@ const styles = StyleSheet.create({
   btnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
   badgeFeito: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#10b981', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 12 },
   badgeFeitoText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
+  badgePendente: { backgroundColor: '#fef3c7', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 12 },
+  badgePendenteText: { color: '#b45309', fontWeight: 'bold', fontSize: 13 },
   badgeFeitoSm: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#dcfce7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
   badgeFeitoSmText: { color: '#16a34a', fontWeight: 'bold', fontSize: 12 },
   empty: { textAlign: 'center', color: '#64748b', marginTop: 50, fontSize: 16 }
