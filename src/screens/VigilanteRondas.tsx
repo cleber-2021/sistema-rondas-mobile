@@ -300,23 +300,35 @@ export default function VigilanteRondas({ navigation, route }: any) {
     const agora = Date.now();
     const intervaloMs = intervaloMin * 60_000;
 
-    // Janela de operação de hoje
+    // Janela de operação começando HOJE em hora_inicio
     const inicio = new Date();
     let hi = 0, mi = 0;
     if (horaInicio) { const p = horaInicio.split(':').map(Number); hi = p[0]; mi = p[1]; }
     inicio.setHours(hi, mi, 0, 0);
 
+    // Detecta turno que vira o dia (ex: 19:30 → 06:30)
+    let hf = 0, mf = 0;
+    const temFim = !!horaFim;
+    if (horaFim) { const p = horaFim.split(':').map(Number); hf = p[0]; mf = p[1]; }
+    const cruzaMeiaNoite = temFim && (hf * 60 + mf) <= (hi * 60 + mi);
+
     const fim = new Date(inicio);
-    if (horaFim) {
-      const [hf, mf] = horaFim.split(':').map(Number);
+    if (temFim) {
       fim.setHours(hf, mf, 0, 0);
-      // Turno que vira o dia (ex: 19h às 07h) → fim é no dia seguinte
-      if (fim.getTime() <= inicio.getTime()) fim.setDate(fim.getDate() + 1);
+      if (cruzaMeiaNoite) fim.setDate(fim.getDate() + 1); // fim é no dia seguinte
     } else {
       fim.setDate(fim.getDate() + 1); // sem fim definido = 24h
     }
 
-    // Se já passou do fim da janela de hoje, rola para a janela de amanhã
+    // Turno que vira o dia e agora estamos na MADRUGADA (antes da abertura de hoje):
+    // a janela ativa começou ONTEM. Sem isso, o app pensa que a próxima ronda é só
+    // à noite (hora_inicio) e trava entre 00:00 e o fim do turno.
+    if (cruzaMeiaNoite && agora < inicio.getTime()) {
+      inicio.setDate(inicio.getDate() - 1);
+      fim.setDate(fim.getDate() - 1);
+    }
+
+    // Se já passou do fim da janela, rola para a próxima janela
     if (agora >= fim.getTime()) {
       inicio.setDate(inicio.getDate() + 1);
       fim.setDate(fim.getDate() + 1);
