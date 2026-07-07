@@ -11,6 +11,7 @@ import notifee, { EventType } from '@notifee/react-native';
 import api, { registrarHandlerSessaoExpirada } from './src/services/api';
 import DespertaAlarm from './src/screens/DespertaAlarm';
 import { carregarEAgendarDespertas } from './src/services/despertaService';
+import { solicitarPermissoesIniciais } from './src/services/permissoes';
 
 import Login from './src/screens/Login';
 import SupervisorHome from './src/screens/SupervisorHome';
@@ -122,6 +123,12 @@ export default function App() {
   // inclusive quando o app é aberto a partir de fechado (cold start).
   const ultimaResposta = Notifications.useLastNotificationResponse();
   const respostaProcessada = React.useRef<string | null>(null);
+
+  // Ao abrir o app, solicita todas as permissões necessárias (localização,
+  // câmera, notificações, galeria) numa sequência única de diálogos.
+  useEffect(() => {
+    solicitarPermissoesIniciais().catch(() => {});
+  }, []);
 
   useEffect(() => {
     registrarHandlerSessaoExpirada(() => {

@@ -438,7 +438,11 @@ export default function VigilanteRondas({ navigation, route }: any) {
 
       setRondaEmAndamento(r);
       setPontoAtual(primeiroPonto);
-    } catch (e) { Alert.alert('Erro', 'Falha ao iniciar.'); }
+    } catch (e: any) {
+      // Mostra a mensagem real do backend (ex.: janela de horário) em vez de genérica
+      const msg = e?.response?.data?.error || 'Falha ao iniciar.';
+      Alert.alert('Erro', msg);
+    }
   }
 
   async function registrarPontoNaApi(lat: number, lng: number) {
