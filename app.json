@@ -38,7 +38,14 @@
         "POST_NOTIFICATIONS",
         "USE_FULL_SCREEN_INTENT",
         "SCHEDULE_EXACT_ALARM",
-        "USE_EXACT_ALARM"
+        "USE_EXACT_ALARM",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -71,7 +78,9 @@
       "expo-font"
     ],
     "extra": {
-      "eas": {}
+      "eas": {
+        "projectId": "1133828b-f5af-4b0a-81df-1f4ac4f9270e"
+      }
     },
     "owner": "clebersulcleans-team"
   }
