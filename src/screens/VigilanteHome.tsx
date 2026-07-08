@@ -7,6 +7,7 @@ import * as Notifications from 'expo-notifications';
 import { useFocusEffect } from '@react-navigation/native';
 import api, { cancelarTodasNotificacoes } from '../services/api';
 import { carregarEAgendarDespertas } from '../services/despertaService';
+import { solicitarPermissoesIniciais } from '../services/permissoes';
 
 interface OcorrenciaPendente {
   id: string;
@@ -33,6 +34,9 @@ export default function VigilanteHome({ navigation }: any) {
       if (userString) setNomePosto(JSON.parse(userString).nome);
     }
     carregarUser();
+    // Pede as permissões aqui (tela já interativa após o login) — no cold start
+    // do App o Android descarta os diálogos de câmera/localização.
+    solicitarPermissoesIniciais().catch(() => {});
     // Agenda/reagenda despertadores ao abrir a tela home
     carregarEAgendarDespertas().catch(() => {});
   }, []);

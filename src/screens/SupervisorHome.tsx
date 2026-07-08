@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
 import api, { cancelarTodasNotificacoes } from '../services/api';
+import { solicitarPermissoesIniciais } from '../services/permissoes';
 
 export default function SupervisorHome({ navigation }: any) {
   const [nome, setNome] = useState('');
@@ -15,6 +16,8 @@ export default function SupervisorHome({ navigation }: any) {
       if (userString) setNome(JSON.parse(userString).nome);
     }
     carregarUser();
+    // Pede as permissões com a tela já interativa (cold start descarta os diálogos)
+    solicitarPermissoesIniciais().catch(() => {});
     // Cancela todas as notificações de inspeção agendadas — supervisor não deve recebê-las
     Notifications.cancelAllScheduledNotificationsAsync();
   }, []);
