@@ -48,6 +48,25 @@ function comTimeout<T>(p: Promise<T>, ms = 8000): Promise<T | null> {
   ]);
 }
 
+// Abre a câmera de forma robusta e retorna a foto em data URI (base64) ou null.
+// - Garante a permissão (com atalho para Configurações se bloqueada).
+// - NÃO usa allowsEditing (o recorte trava a abertura da câmera em vários Androids).
+// - Captura erros do launch e mostra a causa real, em vez de "não abrir" silencioso.
+export async function tirarFotoBase64(): Promise<string | null> {
+  const ok = await garantirPermissaoCamera();
+  if (!ok) return null;
+  try {
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.3, base64: true });
+    if (!result.canceled && result.assets?.[0]?.base64) {
+      return `data:image/jpeg;base64,${result.assets[0].base64}`;
+    }
+    return null;
+  } catch (e: any) {
+    Alert.alert('Erro na câmera', e?.message || 'Não foi possível abrir a câmera neste aparelho.');
+    return null;
+  }
+}
+
 export async function solicitarPermissoesIniciais(): Promise<void> {
   // 1) Localização (bater ponto por GPS)
   try {

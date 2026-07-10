@@ -9,6 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
 import * as Notifications from 'expo-notifications';
+import { tirarFotoBase64 } from '../services/permissoes';
 
 const BACKGROUND_LOCATION_TASK = 'BACKGROUND_LOCATION_TASK';
 
@@ -541,12 +542,8 @@ export default function VigilanteRondas({ navigation, route }: any) {
   }
 
   async function tirarFotoChecklist(perguntaId: string) {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') return Alert.alert('Aviso', 'Precisamos da câmera.');
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [4, 3], quality: 0.3, base64: true });
-    if (!result.canceled && result.assets && result.assets[0].base64) {
-      atualizarRespostaChecklist(perguntaId, 'foto_base64', `data:image/jpeg;base64,${result.assets[0].base64}`);
-    }
+    const foto = await tirarFotoBase64();
+    if (foto) atualizarRespostaChecklist(perguntaId, 'foto_base64', foto);
   }
 
   async function finalizarComChecklist() {

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, Image, ScrollView } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
+import { tirarFotoBase64 } from '../services/permissoes';
 
 export default function SupervisorOcorrencias({ navigation }: any) {
   const [descricao, setDescricao] = useState('');
@@ -10,13 +10,8 @@ export default function SupervisorOcorrencias({ navigation }: any) {
   const [loading, setLoading] = useState(false);
 
   async function abrirCamera() {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') return Alert.alert('Aviso', 'Precisamos da câmera.');
-    
-    let result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [4, 3], quality: 0.3, base64: true });
-    if (!result.canceled && result.assets && result.assets[0].base64) {
-      setFotoBase64(`data:image/jpeg;base64,${result.assets[0].base64}`);
-    }
+    const foto = await tirarFotoBase64();
+    if (foto) setFotoBase64(foto);
   }
 
   async function enviarOcorrencia() {

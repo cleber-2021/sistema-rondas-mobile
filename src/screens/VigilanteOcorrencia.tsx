@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView, TextInput, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
-import { garantirPermissaoCamera } from '../services/permissoes';
+import { tirarFotoBase64 } from '../services/permissoes';
 
 export default function VigilanteOcorrencia({ navigation }: any) {
   const [descricao, setDescricao] = useState('');
@@ -51,12 +50,8 @@ export default function VigilanteOcorrencia({ navigation }: any) {
   }
 
   async function abrirCamera() {
-    const ok = await garantirPermissaoCamera();
-    if (!ok) return;
-    let result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [4, 3], quality: 0.3, base64: true });
-    if (!result.canceled && result.assets && result.assets[0].base64) {
-      setFotoBase64(`data:image/jpeg;base64,${result.assets[0].base64}`);
-    }
+    const foto = await tirarFotoBase64();
+    if (foto) setFotoBase64(foto);
   }
 
   async function enviarOcorrencia() {
