@@ -67,7 +67,18 @@ export default function ResponderChecklist({ route, navigation }: any) {
     }
     setLoading(true);
     try {
-      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      // Última posição conhecida (instantânea) primeiro; GPS ao vivo com timeout só se necessário
+      let location: any = await Location.getLastKnownPositionAsync().catch(() => null);
+      if (!location) {
+        location = await Promise.race([
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null),
+          new Promise(resolve => setTimeout(() => resolve(null), 8000)),
+        ]);
+      }
+      if (!location) {
+        Alert.alert('Aviso', 'Não foi possível obter o GPS para encerrar. Tente novamente próximo a uma janela ou ao ar livre.');
+        setLoading(false); return;
+      }
       const arrayRespostas = Object.keys(respostas).map(key => ({
         pergunta_id: key, resposta: respostas[key].resposta, observacao: respostas[key].observacao || '', foto: fotos[key] || null
       }));

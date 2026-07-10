@@ -65,13 +65,15 @@ export default function SupervisorVisitaDetalhe({ navigation, route }: any) {
         Alert.alert('Aviso', 'A permissão de GPS é obrigatória.');
         setIniciandoId(null); return;
       }
-      // Tenta a posição atual com TIMEOUT (evita travar esperando fix de GPS em local fechado);
-      // se estourar, usa a última posição conhecida.
-      let location: any = await Promise.race([
-        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null),
-        new Promise(resolve => setTimeout(() => resolve(null), 8000)),
-      ]);
-      if (!location) location = await Location.getLastKnownPositionAsync();
+      // 1º usa a ÚLTIMA posição conhecida (instantânea — ex.: logo após o checklist anterior).
+      // Só busca o GPS ao vivo (com timeout) se não houver nenhuma posição em cache.
+      let location: any = await Location.getLastKnownPositionAsync().catch(() => null);
+      if (!location) {
+        location = await Promise.race([
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null),
+          new Promise(resolve => setTimeout(() => resolve(null), 8000)),
+        ]);
+      }
       if (!location) {
         Alert.alert('Aviso', 'Não foi possível obter o GPS. Tente novamente, de preferência próximo a uma janela ou ao ar livre.');
         setIniciandoId(null); return;
