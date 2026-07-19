@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, Image, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
-import { tirarFotoBase64 } from '../services/permissoes';
+import { tirarFotoOtimizada } from '../services/foto';
 
 export default function SupervisorOcorrencias({ navigation }: any) {
   const [descricao, setDescricao] = useState('');
@@ -10,7 +10,7 @@ export default function SupervisorOcorrencias({ navigation }: any) {
   const [loading, setLoading] = useState(false);
 
   async function abrirCamera() {
-    const foto = await tirarFotoBase64();
+    const foto = await tirarFotoOtimizada();
     if (foto) setFotoBase64(foto);
   }
 

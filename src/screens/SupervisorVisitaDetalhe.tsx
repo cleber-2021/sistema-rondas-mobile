@@ -5,7 +5,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import api from '../services/api';
 
-const PERIODO_PT: Record<string, string> = { DIARIO: 'Diário', SEMANAL: 'Semanal', QUINZENAL: 'Quinzenal', MENSAL: 'Mensal' };
 
 export default function SupervisorVisitaDetalhe({ navigation, route }: any) {
   const { roteiroId, nome } = route.params;
@@ -21,10 +20,12 @@ export default function SupervisorVisitaDetalhe({ navigation, route }: any) {
     (roteiro?.itens || []).forEach((it: any) => {
       const lid = it.local_id || it.local?.id;
       if (!map[lid]) {
-        map[lid] = { local: it.local, periodicidade: it.periodicidade, checklists: [], feitos: 0 };
+        map[lid] = { local: it.local, checklists: [], feitos: 0, visitasFeitas: 0, metaTotal: 0 };
       }
       map[lid].checklists.push(it);
       if (it.feito) map[lid].feitos++;
+      map[lid].visitasFeitas += (it.visitas_feitas ?? (it.feito ? 1 : 0));
+      map[lid].metaTotal += (typeof it.meta === 'number' ? it.meta : 1);
     });
     return Object.values(map);
   }, [roteiro]);
@@ -78,12 +79,18 @@ export default function SupervisorVisitaDetalhe({ navigation, route }: any) {
         Alert.alert('Aviso', 'Não foi possível obter o GPS. Tente novamente, de preferência próximo a uma janela ou ao ar livre.');
         setIniciandoId(null); return;
       }
-      const response = await api.post('/visitas/iniciar', {
-        local_id: local.id, checklist_id: checklist.id, roteiro_id: roteiroId,
-        latitude: location.coords.latitude, longitude: location.coords.longitude
-      });
+      // A lista vem SEM as perguntas (para carregar rápido). Buscamos o checklist
+      // completo só agora, no momento de iniciar — é uma requisição pequena.
+      const [response, chkFull] = await Promise.all([
+        api.post('/visitas/iniciar', {
+          local_id: local.id, checklist_id: checklist.id, roteiro_id: roteiroId,
+          posto_id: item.posto_id || null,
+          latitude: location.coords.latitude, longitude: location.coords.longitude
+        }),
+        api.get(`/supervisao/checklists/${checklist.id}`),
+      ]);
       navigation.navigate('ResponderChecklist', {
-        visita_id: response.data.visita.id, local_id: local.id, checklist: checklist
+        visita_id: response.data.visita.id, local_id: local.id, checklist: chkFull.data,
       });
     } catch (error: any) {
       Alert.alert('Aviso', error.response?.data?.error || 'Erro ao validar localização GPS.');
@@ -99,7 +106,9 @@ export default function SupervisorVisitaDetalhe({ navigation, route }: any) {
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>{nome}</Text>
           <Text style={styles.subtitle}>
-            {roteiro ? `${roteiro.total_feitos}/${roteiro.total_itens} checklists realizados` : 'Locais da rota'}
+            {roteiro
+              ? `${grupos.reduce((s: number, g: any) => s + (g.visitasFeitas || 0), 0)}/${grupos.reduce((s: number, g: any) => s + (g.metaTotal || 0), 0)} visitas no mês`
+              : 'Locais da rota'}
           </Text>
         </View>
       </View>
@@ -140,42 +149,62 @@ export default function SupervisorVisitaDetalhe({ navigation, route }: any) {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.localNome}>📍 {g.local?.nome}</Text>
                     <Text style={styles.localMeta}>
-                      {PERIODO_PT[g.periodicidade] || g.periodicidade} · {g.feitos}/{g.checklists.length} checklists
+                      {g.visitasFeitas}/{g.metaTotal} visitas no mês · {g.checklists.length} checklist(s)
                     </Text>
                   </View>
                   {tudoFeito ? (
                     <View style={styles.badgeFeito}>
                       <Ionicons name="checkmark-circle" size={16} color="#fff" />
-                      <Text style={styles.badgeFeitoText}>Completo</Text>
+                      <Text style={styles.badgeFeitoText}>Meta OK</Text>
                     </View>
                   ) : (
                     <View style={styles.badgePendente}>
-                      <Text style={styles.badgePendenteText}>{g.feitos}/{g.checklists.length}</Text>
+                      <Text style={styles.badgePendenteText}>{g.visitasFeitas}/{g.metaTotal}</Text>
                     </View>
                   )}
                   <Ionicons name={aberto ? 'chevron-up' : 'chevron-down'} size={22} color="#94a3b8" style={{ marginLeft: 10 }} />
                 </TouchableOpacity>
 
                 {/* Checklists do local — só aparecem quando o local está aberto */}
-                {aberto && g.checklists.map((it: any) => (
-                  <View key={it.id} style={[styles.chkRow, it.feito && styles.chkRowFeito]}>
-                    <Text style={styles.chkTitulo}>📋 {it.checklist.titulo}</Text>
-                    {it.feito ? (
+                {aberto && g.checklists.map((it: any) => {
+                  // Novo modelo: meta mensal + contagem. Fallback: boolean "feito" (backend antigo).
+                  const temMeta = typeof it.meta === 'number';
+                  const feitas = it.visitas_feitas ?? (it.feito ? 1 : 0);
+                  const meta = it.meta ?? 1;
+                  const metaBatida = temMeta ? feitas >= meta : !!it.feito;
+                  // O supervisor pode SEMPRE visitar (mesmo após bater a meta), exceto no
+                  // backend antigo, onde "feito" trava (comportamento anterior preservado).
+                  const mostrarBotao = temMeta || !it.feito;
+                  return (
+                  <View key={it.id} style={[styles.chkRow, metaBatida && styles.chkRowFeito]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.chkTitulo}>📋 {it.checklist.titulo}</Text>
+                      {it.posto?.nome && <Text style={{ fontSize: 12, color: '#7c3aed' }}>👷 {it.posto.nome}</Text>}
+                      {temMeta && (
+                        <Text style={{ fontSize: 12, color: metaBatida ? '#16a34a' : '#64748b', fontWeight: '600' }}>
+                          {feitas}/{meta} visitas no mês {metaBatida ? '✓' : ''}
+                        </Text>
+                      )}
+                    </View>
+                    {mostrarBotao ? (
+                      <TouchableOpacity
+                        style={[styles.btnIniciar, metaBatida && { backgroundColor: '#16a34a' }, iniciandoId === it.id && { backgroundColor: '#94a3b8' }]}
+                        onPress={() => handleIniciarVisita(it)}
+                        disabled={iniciandoId === it.id}
+                      >
+                        {iniciandoId === it.id
+                          ? <ActivityIndicator size="small" color="#fff" />
+                          : <Text style={styles.btnText}>{metaBatida ? 'Visitar +' : 'Iniciar'}</Text>}
+                      </TouchableOpacity>
+                    ) : (
                       <View style={styles.badgeFeitoSm}>
                         <Ionicons name="checkmark-circle" size={14} color="#16a34a" />
                         <Text style={styles.badgeFeitoSmText}>Feito</Text>
                       </View>
-                    ) : (
-                      <TouchableOpacity
-                        style={[styles.btnIniciar, iniciandoId === it.id && { backgroundColor: '#94a3b8' }]}
-                        onPress={() => handleIniciarVisita(it)}
-                        disabled={iniciandoId === it.id}
-                      >
-                        {iniciandoId === it.id ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.btnText}>Iniciar</Text>}
-                      </TouchableOpacity>
                     )}
                   </View>
-                ))}
+                  );
+                })}
               </View>
             );
           }}

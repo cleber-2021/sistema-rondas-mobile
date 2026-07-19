@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Scr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
-import { tirarFotoBase64 } from '../services/permissoes';
+import { tirarFotoOtimizada } from '../services/foto';
 
 export default function VigilanteOcorrencia({ navigation }: any) {
   const [descricao, setDescricao] = useState('');
@@ -50,7 +50,7 @@ export default function VigilanteOcorrencia({ navigation }: any) {
   }
 
   async function abrirCamera() {
-    const foto = await tirarFotoBase64();
+    const foto = await tirarFotoOtimizada();
     if (foto) setFotoBase64(foto);
   }
 
