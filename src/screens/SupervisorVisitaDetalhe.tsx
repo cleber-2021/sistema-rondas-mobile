@@ -1,10 +1,9 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, TextInput } from 'react-native';
-import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import api from '../services/api';
-import { obterLocalizacao } from '../services/gps';
+import { obterLocalizacaoDetalhada } from '../services/gps';
 
 
 export default function SupervisorVisitaDetalhe({ navigation, route }: any) {
@@ -68,15 +67,14 @@ export default function SupervisorVisitaDetalhe({ navigation, route }: any) {
     const checklist = item.checklist;
     setIniciandoId(item.id);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Aviso', 'A permissão de GPS é obrigatória.');
-        setIniciandoId(null); return;
-      }
-      // GPS blindado (nunca pendura — sempre retorna ou avisa)
-      const location = await obterLocalizacao();
+      // GPS blindado: permissão + posição, cada etapa com timeout (nunca pendura).
+      const { location, motivo } = await obterLocalizacaoDetalhada();
       if (!location) {
-        Alert.alert('Aviso', 'Não foi possível obter o GPS. Tente novamente, de preferência próximo a uma janela ou ao ar livre.');
+        if (motivo === 'permissao') {
+          Alert.alert('Permissão de GPS', 'A permissão de localização não está ativa (ou não respondeu). Ative a localização do app nas Configurações e tente de novo.');
+        } else {
+          Alert.alert('Sem sinal de GPS', 'Não foi possível obter a localização. Tente novamente próximo a uma janela ou ao ar livre.');
+        }
         setIniciandoId(null); return;
       }
       // A lista vem SEM as perguntas (para carregar rápido). Buscamos o checklist
@@ -93,7 +91,10 @@ export default function SupervisorVisitaDetalhe({ navigation, route }: any) {
         visita_id: response.data.visita.id, local_id: local.id, checklist: chkFull.data,
       });
     } catch (error: any) {
-      Alert.alert('Aviso', error.response?.data?.error || 'Erro ao validar localização GPS.');
+      const msg = error?.code === 'ECONNABORTED'
+        ? 'O servidor demorou a responder (tempo esgotado). Verifique a conexão e tente de novo.'
+        : (error?.response?.data?.error || 'Erro ao iniciar a visita. Verifique a conexão e tente de novo.');
+      Alert.alert('Aviso', msg);
     } finally { setIniciandoId(null); }
   }
 

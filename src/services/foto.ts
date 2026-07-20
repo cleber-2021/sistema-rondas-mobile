@@ -12,11 +12,24 @@ import * as ImageManipulator from 'expo-image-manipulator';
 const LARGURA_MAX = 1280;
 const COMPRESSAO = 0.6;
 
+function comTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    p.catch(() => null),
+    new Promise<null>(resolve => setTimeout(() => resolve(null), ms)),
+  ]);
+}
+
 async function garantirPermissaoCamera(): Promise<boolean> {
   // SEMPRE solicita (não confia no cache): se o Android revogou a permissão em
   // segundo plano (hibernação/auto-revoke), o status em cache pode dizer "granted"
   // mas a câmera falha. requestCameraPermissionsAsync re-valida e re-pede se preciso.
-  const req = await ImagePicker.requestCameraPermissionsAsync();
+  // Com timeout: a própria chamada nativa pode pendurar (não resolve) em alguns
+  // aparelhos — sem isto, a câmera "não abre" e nada acontece.
+  const req = await comTimeout(ImagePicker.requestCameraPermissionsAsync(), 8000);
+  if (!req) {
+    Alert.alert('Permissão da câmera', 'O pedido de permissão não respondeu. Feche e reabra o app e tente de novo.');
+    return false;
+  }
   if (req.status === 'granted') return true;
   if (req.canAskAgain === false) {
     Alert.alert('Permissão da câmera', 'A câmera está bloqueada. Abra as Configurações do app e ative a permissão de Câmera.');

@@ -17,6 +17,9 @@ export async function cancelarTodasNotificacoes() {
 
 const api = axios.create({
   baseURL: 'https://sulcleansm.ddns.com.br:3443/api',
+  // Sem timeout, uma requisição que engasgue fica girando PARA SEMPRE (é o
+  // "não carrega o checklist"). 20s é folgado para a rede e evita o spinner eterno.
+  timeout: 20000,
 });
 
 // ─── Handler global de sessão expirada ────────────────────────────────────
