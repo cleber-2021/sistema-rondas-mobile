@@ -4,6 +4,7 @@ import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import api from '../services/api';
+import { obterLocalizacao } from '../services/gps';
 
 
 export default function SupervisorVisitaDetalhe({ navigation, route }: any) {
@@ -20,12 +21,18 @@ export default function SupervisorVisitaDetalhe({ navigation, route }: any) {
     (roteiro?.itens || []).forEach((it: any) => {
       const lid = it.local_id || it.local?.id;
       if (!map[lid]) {
-        map[lid] = { local: it.local, checklists: [], feitos: 0, visitasFeitas: 0, metaTotal: 0 };
+        map[lid] = { local: it.local, checklists: [], feitos: 0, visitasFeitas: 0, metaTotal: 0, postos: new Set() };
       }
       map[lid].checklists.push(it);
       if (it.feito) map[lid].feitos++;
-      map[lid].visitasFeitas += (it.visitas_feitas ?? (it.feito ? 1 : 0));
-      map[lid].metaTotal += (typeof it.meta === 'number' ? it.meta : 1);
+      // Meta e visitas são por LOCAL+POSTO (uma ida = 1 visita). Não somar por checklist:
+      // conta uma vez por posto (todos os checklists do mesmo posto já trazem o mesmo valor).
+      const pkey = it.posto_id || '_sem_posto_';
+      if (!map[lid].postos.has(pkey)) {
+        map[lid].postos.add(pkey);
+        map[lid].visitasFeitas += (it.visitas_feitas ?? (it.feito ? 1 : 0));
+        map[lid].metaTotal += (typeof it.meta === 'number' ? it.meta : 1);
+      }
     });
     return Object.values(map);
   }, [roteiro]);
@@ -66,15 +73,8 @@ export default function SupervisorVisitaDetalhe({ navigation, route }: any) {
         Alert.alert('Aviso', 'A permissão de GPS é obrigatória.');
         setIniciandoId(null); return;
       }
-      // 1º usa a ÚLTIMA posição conhecida (instantânea — ex.: logo após o checklist anterior).
-      // Só busca o GPS ao vivo (com timeout) se não houver nenhuma posição em cache.
-      let location: any = await Location.getLastKnownPositionAsync().catch(() => null);
-      if (!location) {
-        location = await Promise.race([
-          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null),
-          new Promise(resolve => setTimeout(() => resolve(null), 8000)),
-        ]);
-      }
+      // GPS blindado (nunca pendura — sempre retorna ou avisa)
+      const location = await obterLocalizacao();
       if (!location) {
         Alert.alert('Aviso', 'Não foi possível obter o GPS. Tente novamente, de preferência próximo a uma janela ou ao ar livre.');
         setIniciandoId(null); return;

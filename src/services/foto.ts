@@ -13,11 +13,16 @@ const LARGURA_MAX = 1280;
 const COMPRESSAO = 0.6;
 
 async function garantirPermissaoCamera(): Promise<boolean> {
-  const atual = await ImagePicker.getCameraPermissionsAsync();
-  if (atual.status === 'granted') return true;
+  // SEMPRE solicita (não confia no cache): se o Android revogou a permissão em
+  // segundo plano (hibernação/auto-revoke), o status em cache pode dizer "granted"
+  // mas a câmera falha. requestCameraPermissionsAsync re-valida e re-pede se preciso.
   const req = await ImagePicker.requestCameraPermissionsAsync();
   if (req.status === 'granted') return true;
-  Alert.alert('Permissão da câmera', 'Precisamos da câmera para tirar a foto.');
+  if (req.canAskAgain === false) {
+    Alert.alert('Permissão da câmera', 'A câmera está bloqueada. Abra as Configurações do app e ative a permissão de Câmera.');
+  } else {
+    Alert.alert('Permissão da câmera', 'Precisamos da câmera para tirar a foto.');
+  }
   return false;
 }
 

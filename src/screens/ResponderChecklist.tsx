@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, Image } from 'react-native';
-import * as Location from 'expo-location';
+import { obterLocalizacao } from '../services/gps';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
@@ -67,14 +67,7 @@ export default function ResponderChecklist({ route, navigation }: any) {
     }
     setLoading(true);
     try {
-      // Última posição conhecida (instantânea) primeiro; GPS ao vivo com timeout só se necessário
-      let location: any = await Location.getLastKnownPositionAsync().catch(() => null);
-      if (!location) {
-        location = await Promise.race([
-          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null),
-          new Promise(resolve => setTimeout(() => resolve(null), 8000)),
-        ]);
-      }
+      const location = await obterLocalizacao();
       if (!location) {
         Alert.alert('Aviso', 'Não foi possível obter o GPS para encerrar. Tente novamente próximo a uma janela ou ao ar livre.');
         setLoading(false); return;
