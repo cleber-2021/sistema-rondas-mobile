@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal, ScrollView, TextInput, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { tirarFotoBase64 } from '../services/permissoes';
+import CameraCaptura from '../components/CameraCaptura';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
 
@@ -13,6 +13,8 @@ export default function VigilantePassagem({ navigation }: any) {
   const [respostasPassagem, setRespostasPassagem] = useState<any>({});
   const [loadingPassagem, setLoadingPassagem] = useState(false);
   const [horaAtualDaUI, setHoraAtualDaUI] = useState(Date.now());
+  // Id da pergunta cuja foto está sendo tirada (null = câmera fechada).
+  const [alvoFoto, setAlvoFoto] = useState<string | null>(null);
 
   useEffect(() => {
     const timerRelogio = setInterval(() => setHoraAtualDaUI(Date.now()), 10000);
@@ -79,9 +81,12 @@ export default function VigilantePassagem({ navigation }: any) {
     }));
   }
 
-  async function tirarFotoPassagem(perguntaId: string) {
-    const foto = await tirarFotoBase64();
-    if (foto) atualizarResposta(perguntaId, 'foto_base64', foto);
+  function tirarFotoPassagem(perguntaId: string) {
+    setAlvoFoto(perguntaId);
+  }
+
+  function receberFoto(dataUri: string) {
+    if (alvoFoto) atualizarResposta(alvoFoto, 'foto_base64', dataUri);
   }
 
   async function enviarPassagemServico() {
@@ -191,6 +196,11 @@ export default function VigilantePassagem({ navigation }: any) {
         </View>
       </Modal>
 
+      <CameraCaptura
+        visible={alvoFoto !== null}
+        onFoto={receberFoto}
+        onFechar={() => setAlvoFoto(null)}
+      />
     </View>
   );
 }

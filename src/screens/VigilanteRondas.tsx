@@ -9,8 +9,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
 import * as Notifications from 'expo-notifications';
-import { tirarFotoBase64 } from '../services/permissoes';
 import { obterLocalizacaoDetalhada } from '../services/gps';
+import CameraCaptura from '../components/CameraCaptura';
 
 const BACKGROUND_LOCATION_TASK = 'BACKGROUND_LOCATION_TASK';
 
@@ -118,6 +118,8 @@ export default function VigilanteRondas({ navigation, route }: any) {
   const jaFalhou = useRef(false);
 
   const [modalScanner, setModalScanner] = useState(false);
+  // Alvo da foto na câmera interna: 'ocorrencia', o id da pergunta, ou null (fechada).
+  const [alvoFoto, setAlvoFoto] = useState<string | null>(null);
   const [permissaoCamera, pedirPermissaoCamera] = useCameraPermissions();
   const [modalOcorrencia, setModalOcorrencia] = useState(false);
   const [descricaoOcorrencia, setDescricaoOcorrencia] = useState('');
@@ -542,9 +544,15 @@ export default function VigilanteRondas({ navigation, route }: any) {
     }));
   }
 
-  async function tirarFotoChecklist(perguntaId: string) {
-    const foto = await tirarFotoBase64();
-    if (foto) atualizarRespostaChecklist(perguntaId, 'foto_base64', foto);
+  function tirarFotoChecklist(perguntaId: string) {
+    setAlvoFoto(perguntaId);
+  }
+
+  // Recebe a foto da câmera interna e guarda no destino certo.
+  function receberFoto(dataUri: string) {
+    if (!alvoFoto) return;
+    if (alvoFoto === 'ocorrencia') setFotoBase64(dataUri);
+    else atualizarRespostaChecklist(alvoFoto, 'foto_base64', dataUri);
   }
 
   async function finalizarComChecklist() {
@@ -612,28 +620,19 @@ export default function VigilanteRondas({ navigation, route }: any) {
     }
   }
 
-  async function tirarFotoOcorrencia() {
-    // Verifica primeiro (o request direto pendura quando já concedida); só pede
-    // se ainda não estiver concedida.
-    let { status } = await ImagePicker.getMediaLibraryPermissionsAsync();
-    let { status: statusCamera } = await ImagePicker.getCameraPermissionsAsync();
-    if (status !== 'granted') status = (await ImagePicker.requestMediaLibraryPermissionsAsync()).status;
-    if (statusCamera !== 'granted') statusCamera = (await ImagePicker.requestCameraPermissionsAsync()).status;
-    if (status !== 'granted' && statusCamera !== 'granted') {
-      Alert.alert('Permissão negada', 'Permite o acesso à câmara ou galeria nas configurações.');
-      return;
-    }
+  function tirarFotoOcorrencia() {
+    // A câmera abre DENTRO do app (a do sistema não abre em alguns aparelhos).
+    // A galeria continua disponível como alternativa.
     Alert.alert('Foto da Ocorrência', 'Como deseja adicionar a foto?', [
-      {
-        text: 'Câmara', onPress: async () => {
-          const res = await ImagePicker.launchCameraAsync({ base64: true, quality: 0.5 });
-          if (!res.canceled && res.assets[0].base64) {
-            setFotoBase64(`data:image/jpeg;base64,${res.assets[0].base64}`);
-          }
-        }
-      },
+      { text: 'Câmara', onPress: () => setAlvoFoto('ocorrencia') },
       {
         text: 'Galeria', onPress: async () => {
+          let { status } = await ImagePicker.getMediaLibraryPermissionsAsync();
+          if (status !== 'granted') status = (await ImagePicker.requestMediaLibraryPermissionsAsync()).status;
+          if (status !== 'granted') {
+            Alert.alert('Permissão negada', 'Permite o acesso à galeria nas configurações.');
+            return;
+          }
           const res = await ImagePicker.launchImageLibraryAsync({ base64: true, quality: 0.5 });
           if (!res.canceled && res.assets[0].base64) {
             setFotoBase64(`data:image/jpeg;base64,${res.assets[0].base64}`);
@@ -809,6 +808,12 @@ export default function VigilanteRondas({ navigation, route }: any) {
           <Ionicons name="close" size={28} color="#fff" />
         </TouchableOpacity>
       </Modal>
+
+      <CameraCaptura
+        visible={alvoFoto !== null}
+        onFoto={receberFoto}
+        onFechar={() => setAlvoFoto(null)}
+      />
 
       {/* Modal: Registrar Ocorrência */}
       <Modal visible={modalOcorrencia} animationType="slide" transparent>

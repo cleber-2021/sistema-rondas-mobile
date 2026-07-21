@@ -2,16 +2,17 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, Image, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
-import { tirarFotoOtimizada } from '../services/foto';
+import CameraCaptura from '../components/CameraCaptura';
 
 export default function SupervisorOcorrencias({ navigation }: any) {
   const [descricao, setDescricao] = useState('');
   const [fotoBase64, setFotoBase64] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [cameraAberta, setCameraAberta] = useState(false);
 
-  async function abrirCamera() {
-    const foto = await tirarFotoOtimizada();
-    if (foto) setFotoBase64(foto);
+  // Abre a câmera DENTRO do app (o app de câmera do sistema não abre em alguns aparelhos).
+  function abrirCamera() {
+    setCameraAberta(true);
   }
 
   async function enviarOcorrencia() {
@@ -67,6 +68,12 @@ export default function SupervisorOcorrencias({ navigation }: any) {
           {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnEnviarText}>🚀 Enviar para a Central</Text>}
         </TouchableOpacity>
       </View>
+
+      <CameraCaptura
+        visible={cameraAberta}
+        onFoto={setFotoBase64}
+        onFechar={() => setCameraAberta(false)}
+      />
     </ScrollView>
   );
 }

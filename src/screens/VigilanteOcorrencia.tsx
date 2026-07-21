@@ -3,11 +3,12 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Scr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
-import { tirarFotoOtimizada } from '../services/foto';
+import CameraCaptura from '../components/CameraCaptura';
 
 export default function VigilanteOcorrencia({ navigation }: any) {
   const [descricao, setDescricao] = useState('');
   const [fotoBase64, setFotoBase64] = useState<string | null>(null);
+  const [cameraAberta, setCameraAberta] = useState(false);
   const [postoId, setPostoId] = useState<string | null>(null);
   
   // === VARIÁVEIS DO NOVO COMBOBOX ===
@@ -49,9 +50,9 @@ export default function VigilanteOcorrencia({ navigation }: any) {
     }
   }
 
-  async function abrirCamera() {
-    const foto = await tirarFotoOtimizada();
-    if (foto) setFotoBase64(foto);
+  // Abre a câmera DENTRO do app (o app de câmera do sistema não abre em alguns aparelhos).
+  function abrirCamera() {
+    setCameraAberta(true);
   }
 
   async function enviarOcorrencia() {
@@ -174,6 +175,12 @@ export default function VigilanteOcorrencia({ navigation }: any) {
         </TouchableOpacity>
 
       </ScrollView>
+
+      <CameraCaptura
+        visible={cameraAberta}
+        onFoto={setFotoBase64}
+        onFechar={() => setCameraAberta(false)}
+      />
     </View>
   );
 }

@@ -4,7 +4,7 @@ import { obterLocalizacao } from '../services/gps';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
-import { garantirPermissaoCamera } from '../services/permissoes';
+import CameraCaptura from '../components/CameraCaptura';
 
 export default function ResponderChecklist({ route, navigation }: any) {
   const { visita_id, local_id, checklist } = route.params;
@@ -17,6 +17,8 @@ export default function ResponderChecklist({ route, navigation }: any) {
   const [descOco, setDescOco] = useState('');
   const [fotoOco, setFotoOco] = useState<string | null>(null);
   const [loadingOco, setLoadingOco] = useState(false);
+  // Qual foto está sendo tirada: id da pergunta, 'ocorrencia', ou null (câmera fechada).
+  const [alvoFoto, setAlvoFoto] = useState<string | null>(null);
 
   function selecionarResposta(perguntaId: string, valor: string) {
     setRespostas({ ...respostas, [perguntaId]: { ...respostas[perguntaId], resposta: valor } });
@@ -26,23 +28,25 @@ export default function ResponderChecklist({ route, navigation }: any) {
     setRespostas({ ...respostas, [perguntaId]: { ...respostas[perguntaId], observacao: texto } });
   }
 
-  async function tirarFoto(pergunta_id: string) {
-    // Verifica a permissão primeiro (o request direto pendura quando já concedida).
-    const ok = await garantirPermissaoCamera();
-    if (!ok) return;
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 0.3, base64: true });
-    if (!result.canceled && result.assets[0].base64) {
-      const base64 = result.assets[0].base64;
-      setFotos(prev => ({ ...prev, [pergunta_id]: base64 }));
-    }
+  // Câmera DENTRO do app (o app de câmera do sistema não abre em alguns aparelhos).
+  // "alvo" diz onde guardar a foto: o id da pergunta, ou 'ocorrencia'.
+  function tirarFoto(pergunta_id: string) {
+    setAlvoFoto(pergunta_id);
   }
 
   // === FUNÇÕES DA OCORRÊNCIA EXCEPCIONAL ===
-  async function tirarFotoOcorrencia() {
-    const ok = await garantirPermissaoCamera();
-    if (!ok) return;
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.3, base64: true });
-    if (!result.canceled && result.assets[0].base64) { setFotoOco(`data:image/jpeg;base64,${result.assets[0].base64}`); }
+  function tirarFotoOcorrencia() {
+    setAlvoFoto('ocorrencia');
+  }
+
+  function receberFoto(dataUri: string) {
+    if (!alvoFoto) return;
+    if (alvoFoto === 'ocorrencia') {
+      setFotoOco(dataUri);
+    } else {
+      // As respostas do checklist são enviadas como base64 puro (sem o prefixo data:).
+      setFotos(prev => ({ ...prev, [alvoFoto]: dataUri.replace(/^data:image\/\w+;base64,/, '') }));
+    }
   }
 
   async function enviarOcorrencia() {
@@ -134,6 +138,12 @@ export default function ResponderChecklist({ route, navigation }: any) {
       <TouchableOpacity style={styles.fabOcorrencia} onPress={() => setModalOco(true)}>
         <Ionicons name="warning" size={24} color="#fff" />
       </TouchableOpacity>
+
+      <CameraCaptura
+        visible={alvoFoto !== null}
+        onFoto={receberFoto}
+        onFechar={() => setAlvoFoto(null)}
+      />
 
       <View style={styles.footer}>
         <TouchableOpacity style={styles.btnSalvar} onPress={finalizarVisita} disabled={loading}>
