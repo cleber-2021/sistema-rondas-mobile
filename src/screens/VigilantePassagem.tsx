@@ -82,11 +82,21 @@ export default function VigilantePassagem({ navigation }: any) {
   }
 
   function tirarFotoPassagem(perguntaId: string) {
+    // Android não abre Modal sobre Modal: fecha o da passagem, abre a câmera,
+    // e reabre depois (as respostas já preenchidas ficam no estado).
+    setModalPassagem(false);
     setAlvoFoto(perguntaId);
   }
 
   function receberFoto(dataUri: string) {
     if (alvoFoto) atualizarResposta(alvoFoto, 'foto_base64', dataUri);
+  }
+
+  function fecharCamera() {
+    setAlvoFoto(null);
+    // Espera a câmera fechar antes de reabrir (transições simultâneas de Modal
+    // no Android podem deixar a tela travada).
+    setTimeout(() => setModalPassagem(true), 350);
   }
 
   async function enviarPassagemServico() {
@@ -189,7 +199,7 @@ export default function VigilantePassagem({ navigation }: any) {
             ))}
 
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 10, paddingBottom: 40 }}>
-              <TouchableOpacity style={{ flex: 1, padding: 15, backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, alignItems: 'center' }} onPress={() => setModalPassagem(false)}><Text style={{ fontWeight: 'bold' }}>Cancelar</Text></TouchableOpacity>
+              <TouchableOpacity style={{ flex: 1, padding: 15, backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, alignItems: 'center' }} onPress={() => setModalPassagem(false)}><Text style={{ fontWeight: 'bold', color: '#1e293b' }}>Cancelar</Text></TouchableOpacity>
               <TouchableOpacity style={{ flex: 1, padding: 15, backgroundColor: '#2563eb', borderRadius: 8, alignItems: 'center' }} onPress={enviarPassagemServico} disabled={loadingPassagem}>{loadingPassagem ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: 'bold' }}>🚀 Finalizar</Text>}</TouchableOpacity>
             </View>
           </ScrollView>
@@ -199,7 +209,7 @@ export default function VigilantePassagem({ navigation }: any) {
       <CameraCaptura
         visible={alvoFoto !== null}
         onFoto={receberFoto}
-        onFechar={() => setAlvoFoto(null)}
+        onFechar={fecharCamera}
       />
     </View>
   );

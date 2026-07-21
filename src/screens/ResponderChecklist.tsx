@@ -36,7 +36,18 @@ export default function ResponderChecklist({ route, navigation }: any) {
 
   // === FUNÇÕES DA OCORRÊNCIA EXCEPCIONAL ===
   function tirarFotoOcorrencia() {
+    // No Android um Modal não abre por cima de outro: fecha o da ocorrência,
+    // abre a câmera, e reabre a ocorrência ao terminar (o texto é preservado).
+    setModalOco(false);
     setAlvoFoto('ocorrencia');
+  }
+
+  function fecharCamera() {
+    const eraOcorrencia = alvoFoto === 'ocorrencia';
+    setAlvoFoto(null);
+    // Espera a câmera fechar antes de reabrir (transições simultâneas de Modal
+    // no Android podem deixar a tela travada).
+    if (eraOcorrencia) setTimeout(() => setModalOco(true), 350);
   }
 
   function receberFoto(dataUri: string) {
@@ -124,11 +135,11 @@ export default function ResponderChecklist({ route, navigation }: any) {
       <Modal visible={modalOco} animationType="slide">
         <View style={{ flex: 1, backgroundColor: '#f8fafc', padding: 25, paddingTop: 60 }}>
           <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1e293b', marginBottom: 20 }}>Abrir Ocorrência Crítica</Text>
-          <TextInput style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, padding: 15, height: 120, textAlignVertical: 'top', marginBottom: 20 }} placeholder="Descreva o problema grave encontrado na visita..." multiline value={descOco} onChangeText={setDescOco} />
+          <TextInput style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, padding: 15, height: 120, textAlignVertical: 'top', marginBottom: 20, color: '#1e293b' }} placeholder="Descreva o problema grave encontrado na visita..." placeholderTextColor="#94a3b8" multiline value={descOco} onChangeText={setDescOco} />
           <TouchableOpacity style={{ backgroundColor: '#475569', padding: 15, borderRadius: 8, alignItems: 'center', marginBottom: 20 }} onPress={tirarFotoOcorrencia}><Text style={{ color: '#fff', fontWeight: 'bold' }}>📸 Tirar Foto da Situação</Text></TouchableOpacity>
           {fotoOco && <Image source={{ uri: fotoOco }} style={{ width: '100%', height: 180, borderRadius: 8, marginBottom: 20 }} />}
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            <TouchableOpacity style={{ flex: 1, padding: 15, backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, alignItems: 'center' }} onPress={() => setModalOco(false)}><Text style={{ fontWeight: 'bold' }}>Cancelar</Text></TouchableOpacity>
+            <TouchableOpacity style={{ flex: 1, padding: 15, backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, alignItems: 'center' }} onPress={() => setModalOco(false)}><Text style={{ fontWeight: 'bold', color: '#1e293b' }}>Cancelar</Text></TouchableOpacity>
             <TouchableOpacity style={{ flex: 1, padding: 15, backgroundColor: '#dc2626', borderRadius: 8, alignItems: 'center' }} onPress={enviarOcorrencia} disabled={loadingOco}>{loadingOco ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: 'bold' }}>Enviar Alerta</Text>}</TouchableOpacity>
           </View>
         </View>
@@ -142,7 +153,7 @@ export default function ResponderChecklist({ route, navigation }: any) {
       <CameraCaptura
         visible={alvoFoto !== null}
         onFoto={receberFoto}
-        onFechar={() => setAlvoFoto(null)}
+        onFechar={fecharCamera}
       />
 
       <View style={styles.footer}>

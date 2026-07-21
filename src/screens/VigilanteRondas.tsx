@@ -120,6 +120,8 @@ export default function VigilanteRondas({ navigation, route }: any) {
   const [modalScanner, setModalScanner] = useState(false);
   // Alvo da foto na câmera interna: 'ocorrencia', o id da pergunta, ou null (fechada).
   const [alvoFoto, setAlvoFoto] = useState<string | null>(null);
+  // Qual modal reabrir depois da câmera (Android não abre Modal sobre Modal).
+  const [restaurarModal, setRestaurarModal] = useState<'ocorrencia' | 'checklist' | null>(null);
   const [permissaoCamera, pedirPermissaoCamera] = useCameraPermissions();
   const [modalOcorrencia, setModalOcorrencia] = useState(false);
   const [descricaoOcorrencia, setDescricaoOcorrencia] = useState('');
@@ -545,6 +547,10 @@ export default function VigilanteRondas({ navigation, route }: any) {
   }
 
   function tirarFotoChecklist(perguntaId: string) {
+    // Fecha o modal do checklist antes (Android não abre Modal sobre Modal)
+    // e reabre depois — as respostas já preenchidas ficam no estado.
+    setModalChecklist(false);
+    setRestaurarModal('checklist');
     setAlvoFoto(perguntaId);
   }
 
@@ -553,6 +559,16 @@ export default function VigilanteRondas({ navigation, route }: any) {
     if (!alvoFoto) return;
     if (alvoFoto === 'ocorrencia') setFotoBase64(dataUri);
     else atualizarRespostaChecklist(alvoFoto, 'foto_base64', dataUri);
+  }
+
+  function fecharCamera() {
+    const voltarPara = restaurarModal;
+    setAlvoFoto(null);
+    setRestaurarModal(null);
+    // Espera a câmera fechar antes de reabrir (transições simultâneas de Modal
+    // no Android podem deixar a tela travada).
+    if (voltarPara === 'ocorrencia') setTimeout(() => setModalOcorrencia(true), 350);
+    else if (voltarPara === 'checklist') setTimeout(() => setModalChecklist(true), 350);
   }
 
   async function finalizarComChecklist() {
@@ -624,9 +640,16 @@ export default function VigilanteRondas({ navigation, route }: any) {
     // A câmera abre DENTRO do app (a do sistema não abre em alguns aparelhos).
     // A galeria continua disponível como alternativa.
     Alert.alert('Foto da Ocorrência', 'Como deseja adicionar a foto?', [
-      { text: 'Câmara', onPress: () => setAlvoFoto('ocorrencia') },
       {
-        text: 'Galeria', onPress: async () => {
+        text: '📸 Tirar Foto', onPress: () => {
+          // Fecha o modal da ocorrência antes de abrir a câmera e reabre depois.
+          setModalOcorrencia(false);
+          setRestaurarModal('ocorrencia');
+          setAlvoFoto('ocorrencia');
+        }
+      },
+      {
+        text: '🖼️ Escolher da Galeria', onPress: async () => {
           let { status } = await ImagePicker.getMediaLibraryPermissionsAsync();
           if (status !== 'granted') status = (await ImagePicker.requestMediaLibraryPermissionsAsync()).status;
           if (status !== 'granted') {
@@ -708,7 +731,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
               return (
                 <View key={rota.id} style={styles.rotaCard}>
                   <View>
-                    <Text style={{ fontWeight: 'bold', fontSize: 16 }}>{rota.nome}</Text>
+                    <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#1e293b' }}>{rota.nome}</Text>
                     <Text style={{ color: '#64748b' }}>{rota.rota_checkpoints?.length || 0} pontos a visitar</Text>
                   </View>
                   <TouchableOpacity style={[styles.btnIniciar, { backgroundColor: '#1a1a1a' }]} onPress={() => iniciarRonda(rota)}>
@@ -746,7 +769,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
             return (
               <View key={rota.id} style={styles.rotaCard}>
                 <View style={{ flex: 1, marginRight: 10 }}>
-                  <Text style={{ fontWeight: 'bold', fontSize: 16 }}>{rota.nome}</Text>
+                  <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#1e293b' }}>{rota.nome}</Text>
                   <Text style={{ color: '#64748b' }}>{rota.rota_checkpoints?.length || 0} pontos a visitar</Text>
                   {dentroJanela && !execucaoNoSlot && (
                     <Text style={{ color: '#dc2626', fontSize: 12, marginTop: 2 }}>
@@ -812,7 +835,7 @@ export default function VigilanteRondas({ navigation, route }: any) {
       <CameraCaptura
         visible={alvoFoto !== null}
         onFoto={receberFoto}
-        onFechar={() => setAlvoFoto(null)}
+        onFechar={fecharCamera}
       />
 
       {/* Modal: Registrar Ocorrência */}
