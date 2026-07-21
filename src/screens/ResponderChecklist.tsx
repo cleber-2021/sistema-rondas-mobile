@@ -4,6 +4,7 @@ import { obterLocalizacao } from '../services/gps';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
+import { garantirPermissaoCamera } from '../services/permissoes';
 
 export default function ResponderChecklist({ route, navigation }: any) {
   const { visita_id, local_id, checklist } = route.params;
@@ -26,8 +27,9 @@ export default function ResponderChecklist({ route, navigation }: any) {
   }
 
   async function tirarFoto(pergunta_id: string) {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') return Alert.alert('Permissão', 'Precisamos da câmera.');
+    // Verifica a permissão primeiro (o request direto pendura quando já concedida).
+    const ok = await garantirPermissaoCamera();
+    if (!ok) return;
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 0.3, base64: true });
     if (!result.canceled && result.assets[0].base64) {
       const base64 = result.assets[0].base64;
@@ -37,8 +39,8 @@ export default function ResponderChecklist({ route, navigation }: any) {
 
   // === FUNÇÕES DA OCORRÊNCIA EXCEPCIONAL ===
   async function tirarFotoOcorrencia() {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') return Alert.alert('Permissão', 'Precisamos da câmera.');
+    const ok = await garantirPermissaoCamera();
+    if (!ok) return;
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.3, base64: true });
     if (!result.canceled && result.assets[0].base64) { setFotoOco(`data:image/jpeg;base64,${result.assets[0].base64}`); }
   }

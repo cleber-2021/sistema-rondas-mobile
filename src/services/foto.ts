@@ -20,11 +20,13 @@ function comTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
 }
 
 async function garantirPermissaoCamera(): Promise<boolean> {
-  // SEMPRE solicita (não confia no cache): se o Android revogou a permissão em
-  // segundo plano (hibernação/auto-revoke), o status em cache pode dizer "granted"
-  // mas a câmera falha. requestCameraPermissionsAsync re-valida e re-pede se preciso.
-  // Com timeout: a própria chamada nativa pode pendurar (não resolve) em alguns
-  // aparelhos — sem isto, a câmera "não abre" e nada acontece.
+  // VERIFICA primeiro (getCameraPermissionsAsync é instantâneo). Só PEDE
+  // (requestCameraPermissionsAsync) se ainda não estiver concedida — porque em
+  // vários aparelhos o "request" PENDURA quando a permissão já foi concedida, e
+  // aí a câmera "não abre". Verificar primeiro evita chamar o request à toa.
+  const atual = await comTimeout(ImagePicker.getCameraPermissionsAsync(), 4000);
+  if (atual && atual.status === 'granted') return true;
+
   const req = await comTimeout(ImagePicker.requestCameraPermissionsAsync(), 8000);
   if (!req) {
     Alert.alert('Permissão da câmera', 'O pedido de permissão não respondeu. Feche e reabra o app e tente de novo.');

@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
 import * as Notifications from 'expo-notifications';
 import { tirarFotoBase64 } from '../services/permissoes';
+import { obterLocalizacaoDetalhada } from '../services/gps';
 
 const BACKGROUND_LOCATION_TASK = 'BACKGROUND_LOCATION_TASK';
 
@@ -595,11 +596,16 @@ export default function VigilanteRondas({ navigation, route }: any) {
     setModalScanner(false);
     if (data !== pontoAtual.checkpoint_id) return Alert.alert('❌ Erro', 'QR Code incorreto.');
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        return Alert.alert('Permissão Negada', 'O App precisa de acesso ao GPS para registrar o ponto.');
+      // GPS blindado: verifica permissão (sem re-pedir à toa) + timeout.
+      const { location: loc, motivo } = await obterLocalizacaoDetalhada();
+      if (!loc) {
+        return Alert.alert(
+          motivo === 'permissao' ? 'Permissão de GPS' : 'Erro de GPS',
+          motivo === 'permissao'
+            ? 'O App precisa de acesso ao GPS para registrar o ponto.'
+            : 'Não foi possível obter sua localização. Verifique se o GPS está ativado.',
+        );
       }
-      let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       await registrarPontoNaApi(loc.coords.latitude, loc.coords.longitude);
     } catch (error) {
       Alert.alert('Erro de GPS', 'Não foi possível obter sua localização. Verifique se o GPS está ativado.');
@@ -607,8 +613,12 @@ export default function VigilanteRondas({ navigation, route }: any) {
   }
 
   async function tirarFotoOcorrencia() {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    const { status: statusCamera } = await ImagePicker.requestCameraPermissionsAsync();
+    // Verifica primeiro (o request direto pendura quando já concedida); só pede
+    // se ainda não estiver concedida.
+    let { status } = await ImagePicker.getMediaLibraryPermissionsAsync();
+    let { status: statusCamera } = await ImagePicker.getCameraPermissionsAsync();
+    if (status !== 'granted') status = (await ImagePicker.requestMediaLibraryPermissionsAsync()).status;
+    if (statusCamera !== 'granted') statusCamera = (await ImagePicker.requestCameraPermissionsAsync()).status;
     if (status !== 'granted' && statusCamera !== 'granted') {
       Alert.alert('Permissão negada', 'Permite o acesso à câmara ou galeria nas configurações.');
       return;

@@ -2,12 +2,12 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput, ScrollView, ActivityIndicator, Image, KeyboardAvoidingView, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { useFocusEffect } from '@react-navigation/native';
 import api, { cancelarTodasNotificacoes } from '../services/api';
 import { carregarEAgendarDespertas } from '../services/despertaService';
 import { solicitarPermissoesIniciais } from '../services/permissoes';
+import { obterLocalizacaoDetalhada } from '../services/gps';
 
 interface OcorrenciaPendente {
   id: string;
@@ -97,11 +97,16 @@ export default function VigilanteHome({ navigation }: any) {
 
   async function dispararSinalPanico() {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        return Alert.alert('Permissão Negada', 'O App precisa de acesso ao GPS para enviar o Pânico.');
+      // GPS blindado: verifica permissão (sem re-pedir à toa) + timeout.
+      const { location: loc, motivo } = await obterLocalizacaoDetalhada();
+      if (!loc) {
+        return Alert.alert(
+          motivo === 'permissao' ? 'Permissão de GPS' : 'Sem sinal de GPS',
+          motivo === 'permissao'
+            ? 'O App precisa de acesso ao GPS para enviar o Pânico.'
+            : 'Não foi possível obter a localização. Tente novamente ao ar livre.',
+        );
       }
-      let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       await api.post('/ocorrencias/panico', { latitude: loc.coords.latitude, longitude: loc.coords.longitude });
       Alert.alert('🆘 SINAL ENVIADO', 'A central foi notificada.');
     } catch (e: any) {

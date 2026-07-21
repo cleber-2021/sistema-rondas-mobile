@@ -1,12 +1,13 @@
 import * as Location from 'expo-location';
 
 // Obtém a localização de forma BLINDADA (nunca pendura).
-// - requestForegroundPermissionsAsync, getLastKnownPositionAsync e
-//   getCurrentPositionAsync podem TRAVAR em alguns aparelhos/estados (não
-//   resolvem nem rejeitam). Por isso TODAS passam por timeout com Promise.race.
-// - 1º garante a permissão, 2º tenta a última posição conhecida (instantânea),
-//   3º tenta o GPS ao vivo. Nunca bloqueia além dos timeouts.
-// - Devolve { location, motivo } para o chamador saber EXATAMENTE onde falhou.
+// - IMPORTANTE: a permissão é VERIFICADA primeiro (getForegroundPermissionsAsync,
+//   instantânea). Só PEDIMOS (requestForegroundPermissionsAsync) se ainda não
+//   estiver concedida — porque em vários aparelhos o "request" PENDURA (não
+//   resolve) quando a permissão já foi concedida. Foi isso que causava o
+//   travamento ao iniciar visita.
+// - getLastKnownPositionAsync e getCurrentPositionAsync também passam por timeout.
+// - Devolve { location, motivo } para o chamador saber onde falhou.
 function comTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
   return Promise.race([
     p.catch(() => null),
@@ -19,16 +20,24 @@ export type ResultadoLocalizacao = {
   motivo?: 'permissao' | 'gps';
 };
 
-export async function obterLocalizacaoDetalhada(): Promise<ResultadoLocalizacao> {
-  // 1) Permissão — com timeout (a própria chamada nativa pode pendurar).
-  const perm = await comTimeout(Location.requestForegroundPermissionsAsync(), 8000);
-  if (!perm || perm.status !== 'granted') return { location: null, motivo: 'permissao' };
+async function garantirPermissaoLocalizacao(): Promise<boolean> {
+  // 1) Verifica (instantâneo, não pendura).
+  const atual = await comTimeout(Location.getForegroundPermissionsAsync(), 4000);
+  if (atual && atual.status === 'granted') return true;
+  // 2) Só pede se realmente não estiver concedida.
+  const req = await comTimeout(Location.requestForegroundPermissionsAsync(), 8000);
+  return !!req && req.status === 'granted';
+}
 
-  // 2) Última posição conhecida (instantânea).
+export async function obterLocalizacaoDetalhada(): Promise<ResultadoLocalizacao> {
+  const ok = await garantirPermissaoLocalizacao();
+  if (!ok) return { location: null, motivo: 'permissao' };
+
+  // Última posição conhecida (instantânea).
   const ultima = await comTimeout(Location.getLastKnownPositionAsync(), 3000);
   if (ultima) return { location: ultima as Location.LocationObject };
 
-  // 3) GPS ao vivo.
+  // GPS ao vivo.
   const atual = await comTimeout(
     Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
     9000,
